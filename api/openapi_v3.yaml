@@ -1,0 +1,239 @@
+openapi: '3.0.2'
+info:
+  title: Election Agent API
+  version: '1.0'
+
+paths:
+  '/kube/{namespace}/{deployment}/pods':
+    parameters:
+      - schema:
+          type: string
+        name: namespace
+        in: path
+        required: true
+        description: The kubenetes namespace.
+      - schema:
+          type: string
+        name: deployment
+        in: path
+        required: true
+        description: The deployment name.
+    get:
+      description: Get a list of pod information
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PodItems'
+        '404':
+          description: No pod exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '500':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+
+  '/election/{name}':
+    parameters:
+      - schema:
+          type: string
+        name: name
+        in: path
+        description: The election name.
+        required: true
+    get:
+      description: Get elected leader name in the election
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leader:
+                    type: string
+                    description: The leader name
+        '500':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    post:
+      description: Campaign the election
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResult'
+        '500':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    patch:
+      description: Extend leadership of the elected election.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendElectedTermRequest'
+      responses:
+        '200':
+          description: Extend the election term success
+        '404':
+          description: The election doesn't exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '500':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    delete:
+      description: Revoke the election
+      responses:
+        '200':
+          description: Extend the election term success
+        '404':
+          description: The election doesn't exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '500':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+
+# shared components
+components:
+  schemas:
+    ErrorMessage:
+      title: Error Message
+      type: object
+      properties:
+        message:
+          type: string
+          description: The error message.
+          example: error message
+      required:
+        - message
+    CampaignRequest:
+      title: Campaign result
+      type: object
+      required:
+        - candidate
+        - term
+      properties:
+        candidate:
+          type: string
+          description: The name of candidate running for this election.
+        term:
+          type: integer
+          description: The milliseconds of election term.
+          minimum: 1000
+    CampaignResult:
+      title: Campaign result
+      type: object
+      properties:
+        elected:
+          type: boolean
+          description: Elected the elecion or not
+        leader:
+          type: string
+          description: The leader name
+    ExtendElectedTermRequest:
+      title: Extend elected term request
+      type: object
+      required:
+        - leader
+        - term
+      properties:
+        leader:
+          type: string
+          description: The elected leader name.
+        term:
+          type: integer
+          description: The milliseconds of election term.
+          minimum: 1000
+    Pod:
+      title: Pod information
+      description: |-
+        The information of Pod, ReplicaSet, and Deployment relationship.
+      type: object
+      properties:
+        name:
+          type: string
+        deployment:
+          type: string
+        ip:
+          type: string
+          format: ipv4
+        status:
+          type: object
+          properties:
+            phase:
+              type: string
+            reason:
+              type: string
+            terminating:
+              type: boolean
+            podScheduled:
+              type: boolean
+            podInitialized:
+              type: boolean
+            podReady:
+              type: boolean
+            containersReady:
+              type: boolean
+        replicaSet:
+          type: object
+          properties:
+            name:
+              type: string
+            revision:
+              type: integer
+            availableReplicas:
+              type: integer
+            fullyLabeledReplicas:
+              type: integer
+            readyReplicas:
+              type: integer
+            replicas:
+              type: integer
+            desiredReplicas:
+              type: integer
+            maxReplicas:
+              type: integer
+    PodItems:
+      title: Pod items
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pod'

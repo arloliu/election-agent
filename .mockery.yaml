@@ -1,0 +1,14 @@
+with-expecter: false
+packages:
+  # election-agent/internal/lease:
+  #   config:
+  #     dir: internal/lease
+  #     inpackage: true
+  #   interfaces:
+  #     Lease:
+  #     LeaseDriver:
+  github.com/go-redsync/redsync/v4/redis:
+    interfaces:
+      Script:
+      Pool:
+      Conn:

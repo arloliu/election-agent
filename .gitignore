@@ -1,0 +1,16 @@
+tmp/*
+.vscode/settings.json
+.vscode
+*.code-workspace
+.coverage
+.env
+
+*.out
+*.test
+*.cov
+*.html
+*.csv
+
+tests/
+/test.log
+/election-agent

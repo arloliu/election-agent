@@ -1,0 +1,91 @@
+syntax = "proto3";
+package grpc.election_agent.v1;
+option go_package = "election-agent/grpc/election_agent_v1";
+
+message BoolValue {
+  bool value = 1;
+}
+
+message StringValue {
+  string value = 1;
+}
+
+message Pods {
+  repeated Pod items = 1;
+}
+
+message Pod {
+  string name = 1;
+  string deployment = 2;
+  string ip = 3;
+  PodStatus status = 4;
+  ReplicaSet replicaSet = 5;
+}
+
+message PodStatus {
+  string phase = 1;
+  string reason = 2;
+  bool terminating = 3;
+  bool podScheduled = 4;
+  bool podInitialized = 5;
+  bool podReady = 6;
+  bool containersReady = 7;
+}
+
+message ReplicaSet {
+  string name = 1;
+  int32 revision = 2;
+  int32 availableReplicas = 3;
+  int32 fullyLabeledReplicas = 4;
+  int32 readyReplicas = 5;
+  int32 replicas = 6;
+  int32 desiredReplicas = 7;
+  int32 maxReplicas = 8;
+}
+
+message CampaignRequest {
+  // the election name
+  string election = 1;
+  // the candidate name
+  string candidate = 2;
+  // the number of milliseconds for this election term
+  int32 term = 3;
+}
+
+message CampaignResult {
+  bool elected = 1;
+  string leader = 2;
+}
+
+message ExtendElectedTermRequest {
+  // the election name
+  string election = 1;
+  // the leader name
+  string leader = 2;
+  // the number of milliseconds for this election term
+  int32 term = 3;
+}
+
+message ResignRequest {
+  // the election name
+  string election = 1;
+  // the leader name
+  string leader = 2;
+}
+
+message GetLeaderRequest {
+  string election = 1;
+}
+
+message GetPodsRequest {
+  string namespace = 1;
+  string deployment = 2;
+}
+
+service Election {
+  rpc Campaign(CampaignRequest) returns (CampaignResult);
+  rpc ExtendElectedTerm(ExtendElectedTermRequest) returns (BoolValue);
+  rpc Resign(ResignRequest) returns (BoolValue);
+  rpc GetLeader(GetLeaderRequest) returns (StringValue);
+  rpc GetPods(GetPodsRequest) returns (Pods);
+}

@@ -1,0 +1,29 @@
+services:
+  redis1:
+    container_name: election-agent-redis1
+    image: redis:7.2
+    command: --port 7000
+    ports:
+      - "7000:7000"
+    networks:
+      - default
+  redis2:
+    container_name: election-agent-redis2
+    image: redis:7.2
+    command: --port 7001
+    ports:
+      - "7001:7001"
+    networks:
+      - default
+  redis3:
+    container_name: election-agent-redis3
+    image: redis:7.2
+    command: --port 7002
+    ports:
+      - "7002:7002"
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge

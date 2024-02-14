@@ -1,0 +1,10 @@
+resources:
+  - deployment.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - role.yaml
+  - rolebinding.yaml
+
+configMapGenerator:
+- name: env-vars
+  env: env-vars.env

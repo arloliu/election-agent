@@ -1,0 +1,196 @@
+package lease
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+
+	"election-agent/internal/config"
+	"election-agent/internal/logging"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestMain(m *testing.M) {
+	config.Default = &config.Config{
+		Env:      "test",
+		LogLevel: "debug",
+	}
+
+	logger := logging.Init()
+	if logger == nil {
+		panic(errors.New("Failed to initial logger"))
+	}
+
+	exitCode := m.Run()
+	os.Exit(exitCode)
+}
+
+func TestRedisLeaseDriver_parseRedisURLs_single(t *testing.T) {
+	require := require.New(t)
+	cfg := config.Config{
+		Redis: config.RedisConfig{
+			Mode: "single",
+			URLs: []string{"redis://user:pass@rs1:6789/1", "redis://user:pass@rs2:6790/2", "redis://user:pass@rs3:6791/3"},
+		},
+	}
+
+	opts, err := parseRedisURLs(&cfg)
+	require.NoError(err)
+	require.NotNil(opts)
+	require.Len(opts, 3)
+
+	for i, o := range opts {
+		require.Len(o.Addrs, 1)
+		require.Equal([]string{fmt.Sprintf("rs%d:%d", i+1, 6789+i)}, o.Addrs)
+		require.Equal("user", o.Username)
+		require.Equal("pass", o.Password)
+		require.Equal(o.DB, i+1)
+	}
+}
+
+func TestRedisLeaseDriver_parseRedisURLs_cluster(t *testing.T) {
+	require := require.New(t)
+	cfg := config.Config{
+		Redis: config.RedisConfig{
+			Mode: "cluster",
+			URLs: []string{
+				"redis://user:pass@c1r1:6379?addr=c1r2:6379&addr=c1r3:6379",
+				"redis://user:pass@c2r1:6379?addr=c2r2:6379&addr=c2r3:6379",
+				"redis://user:pass@c3r1:6379?addr=c3r2:6379&addr=c3r3:6379",
+			},
+		},
+	}
+
+	opts, err := parseRedisURLs(&cfg)
+	require.NoError(err)
+	require.NotNil(opts)
+	require.Len(opts, 3)
+
+	for i, o := range opts {
+		require.Len(o.Addrs, 3)
+		for j, addr := range o.Addrs {
+			require.Equal(fmt.Sprintf("c%dr%d:6379", i+1, j+1), addr)
+		}
+		require.Equal("user", o.Username)
+		require.Equal("pass", o.Password)
+	}
+}
+
+func TestRedisLeaseDriver_getMostFreqVal(t *testing.T) {
+	require := require.New(t)
+
+	strs := make([]string, 0, 1000)
+	for i := 0; i < 400; i++ {
+		strs = append(strs, "item1")
+	}
+	for i := 0; i < 600; i++ {
+		strs = append(strs, "item2")
+	}
+
+	rand.Shuffle(len(strs), func(i, j int) {
+		strs[i], strs[j] = strs[j], strs[i]
+	})
+
+	val, freq := getMostFreqVal(strs)
+	require.Equal("item2", val)
+	require.Equal(600, freq)
+}
+
+func TestRedisLeaseDriver_mocks(t *testing.T) {
+	require := require.New(t)
+	ctx := context.TODO()
+	mockPool := NewMockPool()
+
+	conn, _ := mockPool.Get(ctx)
+	require.NotNil(conn)
+
+	ok, err := conn.Set("key1", "val1")
+	require.NoError(err)
+	require.True(ok)
+
+	v, err := conn.Get("key1")
+	require.NoError(err)
+	require.Equal("val1", v)
+
+	ok, err = conn.SetNX("key1", "val2", time.Second)
+	require.NoError(err)
+	require.False(ok)
+
+	ok, err = conn.SetNX("key2", "val2", time.Second)
+	require.NoError(err)
+	require.True(ok)
+
+	ttl, err := conn.PTTL("key3")
+	require.NoError(err)
+	require.Equal(time.Duration(-2), ttl)
+
+	ttl, err = conn.PTTL("key1")
+	require.NoError(err)
+	require.Equal(time.Duration(-1), ttl)
+
+	ttl, err = conn.PTTL("key2")
+	require.NoError(err)
+	require.LessOrEqual(ttl, time.Second)
+}
+
+func TestRedisLeaseDriver_redisGetAsync(t *testing.T) {
+	require := require.New(t)
+	ctx := context.TODO()
+	driver := NewMockRedisLeaseDriver(&config.Config{})
+
+	poolSet(driver, require, "key1", "val1")
+	val, err := driver.redisGetAsync(ctx, "key1")
+	require.NoError(err)
+	require.Equal("val1", val)
+
+	val, err = driver.redisGetAsync(ctx, "key2")
+	require.Error(err)
+	require.Equal("", val)
+}
+
+func poolSet(driver *RedisLeaseDriver, require *require.Assertions, key string, val string) {
+	for _, pool := range driver.pools {
+		conn, err := pool.Get(driver.ctx)
+		require.NoError(err)
+		require.NotNil(conn)
+		ok, err := conn.Set(key, val)
+		require.NoError(err)
+		require.True(ok)
+	}
+}
+
+func TestRedisLeaseDriver_server_nonexist(t *testing.T) {
+	require := require.New(t)
+
+	ctx := context.TODO()
+	cfg := config.Config{
+		Redis: config.RedisConfig{
+			Mode: "single",
+			URLs: []string{"redis://noneexist:7000", "redis://noneexist:7001", "redis://noneexist:7002"},
+		},
+	}
+
+	driver, err := NewRedisLeaseDriver(ctx, &cfg)
+	require.NoError(err)
+	require.NotNil(driver)
+
+	for _, client := range driver.clients {
+		_, err := client.Ping(ctx).Result()
+		require.Error(err)
+
+		ok, err := client.SetNX(ctx, "test", "value", 10*time.Second).Result()
+		require.Error(err)
+		require.False(ok)
+	}
+
+	lease := driver.NewLease("test", "replica1", 3*time.Second)
+	require.NotNil(lease)
+
+	err = lease.Grant(ctx)
+	require.ErrorContains(err, "failed to acquire lock")
+}
