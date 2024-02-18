@@ -115,6 +115,7 @@ func (rd *RedisLeaseDriver) NewLease(name string, holder string, ttl time.Durati
 			rd.redisKey(name),
 			redsync.WithExpiry(ttl),
 			redsync.WithTries(32),
+			redsync.WithSetNXOnExtend(),
 			redsync.WithTimeoutFactor(0.2),
 			redsync.WithValue(holder),
 			redsync.WithShufflePools(false),
