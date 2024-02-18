@@ -5,12 +5,22 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: "http-api"
+    - name: http
       targetPort: http
       port: 80
-    - name: "grpc-api"
+    - name: grpc
       targetPort: grpc
       port: 443
+  selector:
+    app.kubernetes.io/instance: election-agent-kz1
+    app.kubernetes.io/name: election-agent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: election-agent-headless
+spec:
+  clusterIP: None
   selector:
     app.kubernetes.io/instance: election-agent-kz1
     app.kubernetes.io/name: election-agent

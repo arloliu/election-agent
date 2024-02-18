@@ -1,0 +1,11 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: election-agent
+spec:
+  hosts:
+    - election-agent
+  http:
+    - route:
+        - destination:
+            host: election-agent

@@ -2,12 +2,13 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
+    app: election-agent
     app.kubernetes.io/name: election-agent
     app.kubernetes.io/instance: election-agent-kz1
     app.kubernetes.io/version: 1.0.0
   name: election-agent
 spec:
-  replicas: 2
+  replicas: 3
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -20,7 +21,14 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        sidecar.istio.io/proxyCPU: 500m
+        sidecar.istio.io/proxyCPULimit: 1000m
+        sidecar.istio.io/proxyMemory: 100Mi
+        sidecar.istio.io/proxyMemoryLimit: 200Mi
       labels:
+        app: election-agent
         app.kubernetes.io/instance: election-agent-kz1
         app.kubernetes.io/name: election-agent
         app.kubernetes.io/version: 1.0.0
@@ -38,13 +46,6 @@ spec:
               app.kubernetes.io/name: election-agent
       containers:
         - name: election-agent
-          # env:
-          #   - name: EA_ENV
-          #     value: "production"
-          #   - name: EA_REDIS_MODE
-          #     value: "single"
-          #   - name: EA_REDIS_URLS
-          #     value: "redis://redis1-master:6379,redis://redis2-master:6379,redis://redis3-master:6379"
           envFrom:
           - configMapRef:
               name: env-vars
@@ -55,7 +56,7 @@ spec:
             - containerPort: 443
               name: grpc
               protocol: TCP
-          image: election-agent:1.0.0
+          image: election-agent:distroless-base-nossl
           imagePullPolicy: Never
           livenessProbe:
             grpc:
@@ -70,9 +71,9 @@ spec:
             grpc:
               port: 443
               service: readiness
-            failureThreshold: 4
+            failureThreshold: 2
             initialDelaySeconds: 5
-            periodSeconds: 5
+            periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 3
           resources:
@@ -81,4 +82,4 @@ spec:
               memory: 400Mi
             limits:
               cpu: 1500m
-              memory: 600Mi
+              memory: 1000Mi
