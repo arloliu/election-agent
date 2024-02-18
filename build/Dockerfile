@@ -1,15 +1,12 @@
-FROM golang:1.22-alpine as build
+FROM golang:1.22 as build
 WORKDIR /src
-RUN apk add --no-cache build-base
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN make build
+RUN CGO_ENABLED=1 make build
 
 
-FROM alpine:3.19
-RUN apk add --no-cache --update \
-  && apk add --no-cache curl redis
+FROM gcr.io/distroless/base-nossl-debian12
 
 COPY --from=build /src/election-agent /app/
 

@@ -15,6 +15,7 @@ generate: proto-gen mock-gen
 GOOS        ?= $(shell go env GOOS)
 GOARCH      ?= $(shell go env GOARCH)
 GOPATH      ?= $(shell go env GOPATH)
+CGO_ENABLED ?= 0
 LDFLAGS ?= -ldflags="-s -w"
 
 V ?= 0
@@ -48,8 +49,8 @@ run:
 
 # Build
 build-election-agent: $(ALL_SRC)
-	@printf "Build election-agent for $(GOOS)/$(GOARCH)...\n"
-	go build -tags prodution $(LDFLAGS) -o election-agent ./cmd/election-agent
+	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
+	CGO_ENABLED=$(CGO_ENABLED) go build -tags production $(LDFLAGS) -o election-agent ./cmd/election-agent
 
 # Clean
 clean-bins:
