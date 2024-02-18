@@ -45,6 +45,10 @@ func (s *ElectionHTTPService) MountHandlers(router *gin.Engine) {
 	router.GET("/readyz", s.readyz)
 }
 
+type ErrorResponse struct {
+	Message string `json:"candidate"`
+}
+
 type CampaignRequest struct {
 	Candidate string `json:"candidate" binding:"required"`
 	Term      int32  `json:"term" binding:"required,gte=1000"`

@@ -5,14 +5,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
+	"election-agent/benchmark/bench"
 	"election-agent/internal/config"
 	"election-agent/internal/logging"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	eagrpc "election-agent/proto/election_agent/v1"
 )
@@ -31,82 +34,162 @@ func init() {
 
 	logging.Init()
 
-	flag.StringVar(&host, "h", "localhost:8080", "The gRPC service address")
+	flag.StringVar(&host, "h", "localhost:8080", "The gRPC target address")
 	flag.IntVar(&concurrency, "c", 50, "The number of concurrent clients")
 	flag.IntVar(&iterations, "i", 1000, "The number of iterations per client")
 }
 
 func main() {
 	flag.Parse()
+	ctx, cancel := context.WithCancel(context.Background())
+	client := newBenchmarkClient(ctx, host, concurrency)
+	benchmark := bench.NewBenchmark(ctx, cancel, client, concurrency, iterations)
 
-	ctx := context.Background()
+	benchmark.Start()
+	benchmark.Stop()
+}
 
-	var wg sync.WaitGroup
-	conns := make([]*grpc.ClientConn, concurrency)
-	clients := make([]eagrpc.ElectionClient, concurrency)
+type grpcBenchmarkClient struct {
+	ctx     context.Context
+	n       int
+	target  string
+	conns   []*grpc.ClientConn
+	clients []eagrpc.ElectionClient
+	creqs1  []*eagrpc.CampaignRequest
+	creqs2  []*eagrpc.CampaignRequest
+	ereqs   []*eagrpc.ExtendElectedTermRequest
+}
 
-	fmt.Printf("Start creating gRPC %d clients to server %s...\n", concurrency, host)
+func newBenchmarkClient(ctx context.Context, host string, n int) *grpcBenchmarkClient {
+	client := &grpcBenchmarkClient{
+		ctx:     ctx,
+		n:       n,
+		target:  host,
+		conns:   make([]*grpc.ClientConn, n),
+		clients: make([]eagrpc.ElectionClient, n),
+		creqs1:  make([]*eagrpc.CampaignRequest, n),
+		creqs2:  make([]*eagrpc.CampaignRequest, n),
+		ereqs:   make([]*eagrpc.ExtendElectedTermRequest, n),
+	}
 
-	wg.Add(concurrency)
-	for i := 0; i < concurrency; i++ {
-		go func(idx int) {
-			conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	fmt.Printf("Establishing %d gRPC client connections to target %s\n", n, client.target)
+	for i := 0; i < n; i++ {
+		client.creqs1[i] = &eagrpc.CampaignRequest{
+			Election:  fmt.Sprintf("bench_election%d", i),
+			Candidate: fmt.Sprintf("bench_client%d", i),
+			Term:      bench.BenchmarkTTL,
+		}
+		client.creqs2[i] = &eagrpc.CampaignRequest{
+			Election:  fmt.Sprintf("bench_election%d", i),
+			Candidate: fmt.Sprintf("bench_client%d_other", i),
+			Term:      bench.BenchmarkTTL,
+		}
+		client.ereqs[i] = &eagrpc.ExtendElectedTermRequest{
+			Election: fmt.Sprintf("bench_election%d", i),
+			Leader:   fmt.Sprintf("bench_client%d", i),
+			Term:     bench.BenchmarkTTL,
+		}
+	}
+
+	return client
+}
+
+func (c *grpcBenchmarkClient) Setup() error {
+	errs, ctx := errgroup.WithContext(c.ctx)
+	for i := 0; i < c.n; i++ {
+		idx := i
+		errs.Go(func() error {
+			conn, err := grpc.DialContext(ctx, c.target,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+			)
 			if err != nil {
-				logging.Fatalw("Connect to grpc server fail", "err", err.Error())
-				return
+				return err
 			}
-			conns[idx] = conn
-			clients[idx] = eagrpc.NewElectionClient(conn)
-			wg.Done()
-		}(i)
-	}
-	wg.Wait()
 
-	fmt.Printf("Start benchmarking, %d iterations per client...\n", iterations)
-	wg.Add(concurrency)
-	start := time.Now()
-	for i := 0; i < concurrency; i++ {
-		go func(idx int) {
-			client := clients[idx]
-			creq := &eagrpc.CampaignRequest{Election: fmt.Sprintf("election%d", idx), Candidate: fmt.Sprintf("client%d", idx), Term: 3000}
-			ereq := &eagrpc.ExtendElectedTermRequest{Election: fmt.Sprintf("election%d", idx), Leader: fmt.Sprintf("client%d", idx), Term: 3000}
-			for j := 0; j < iterations; j++ {
-				if j == 0 {
-					ret, err := client.Campaign(ctx, creq)
-					if err != nil {
-						logging.Fatalw("Campaign failed", "req", creq, "ret", ret, "iter", j, "err", err)
-						os.Exit(1)
-					}
-					if !ret.Elected {
-						logging.Fatalw("Campaign failed", "req", creq, "ret", ret, "iter", j)
-						os.Exit(1)
-					}
-				} else {
-					ret, err := client.ExtendElectedTerm(ctx, ereq)
-					if err != nil || !ret.Value {
-						logging.Fatalw("ExtendElectedTerm failed", "req", ereq, "iter", j, "err", err.Error())
-						os.Exit(1)
-					}
-				}
-			}
-			wg.Done()
-		}(i)
-	}
-	wg.Wait()
+			c.conns[idx] = conn
+			c.clients[idx] = eagrpc.NewElectionClient(conn)
 
-	elapsed := time.Since(start)
-	rps := int64(concurrency*iterations*1000) / elapsed.Milliseconds()
-	fmt.Printf("Elasped: %s, RPS: %d reqs/sec\n", elapsed, rps)
-
-	wg.Add(concurrency)
-	for i := 0; i < concurrency; i++ {
-		go func(idx int) {
-			client := clients[idx]
-			rreq := &eagrpc.ResignRequest{Election: fmt.Sprintf("election%d", idx), Leader: fmt.Sprintf("client%d", idx)}
-			_, _ = client.Resign(ctx, rreq)
-			_ = conns[idx].Close()
-			wg.Done()
-		}(i)
+			return nil
+		})
 	}
-	wg.Wait()
+
+	if err := errs.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *grpcBenchmarkClient) Quit(idx int) {
+	client := c.clients[idx]
+	rreq := &eagrpc.ResignRequest{Election: fmt.Sprintf("bench_election%d", idx), Leader: fmt.Sprintf("bench_client%d", idx)}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	val, err := client.Resign(ctx, rreq)
+	if err != nil {
+		fmt.Printf("Client %d resign got error: %s\n", idx, err.Error())
+	}
+	if val != nil && !val.Value {
+		fmt.Printf("Client %d resign failed\n", idx)
+	}
+	_ = c.conns[idx].Close()
+}
+
+func (c *grpcBenchmarkClient) CampaignSuccess(idx int, iteration int) error {
+	client := c.clients[idx]
+	req := c.creqs1[idx]
+	ret, err := client.Campaign(c.ctx, req)
+	if err != nil {
+		code := status.Code(err)
+		if code == codes.Canceled {
+			return nil
+		}
+		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
+	}
+
+	if !ret.Elected {
+		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), expected to successed\n", idx, iteration)
+	}
+
+	return nil
+}
+
+func (c *grpcBenchmarkClient) CampaignFail(idx int, iteration int) error {
+	client := c.clients[idx]
+	req := c.creqs2[idx]
+	ret, err := client.Campaign(c.ctx, req)
+	if err != nil {
+		code := status.Code(err)
+		if code == codes.Canceled {
+			return nil
+		}
+		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
+	}
+	if ret.Elected {
+		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), expected to fail\n", idx, iteration)
+	}
+
+	return nil
+}
+
+func (c *grpcBenchmarkClient) ExtendElectedTerm(idx int, iteration int) error {
+	client := c.clients[idx]
+	req := c.ereqs[idx]
+
+	ret, err := client.ExtendElectedTerm(c.ctx, req)
+	if err != nil {
+		code := status.Code(err)
+		if code == codes.Canceled {
+			return err
+		}
+		return fmt.Errorf("ExtendElectedTerm failed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
+	}
+
+	if !ret.Value {
+		return fmt.Errorf("ExtendElectedTerm failed(client: %d, iteration: %d)", idx, iteration)
+	}
+
+	return nil
 }

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: election-agent-bench
+  annotations:
+    sidecar.istio.io/inject: "false"
+spec:
+  containers:
+    - name: election-agent-bench-client
+      image: election-agent-bench-client
+      resources:
+        requests:
+          cpu: 2000m
+          memory: 400Mi
+        limits:
+          cpu: 4000m
+          memory: 1000Mi
+  restartPolicy: Never
