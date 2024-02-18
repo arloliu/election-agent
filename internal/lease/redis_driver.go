@@ -36,25 +36,27 @@ func (rl *RedisLease) Grant(ctx context.Context) error {
 
 func (rl *RedisLease) Revoke(ctx context.Context) error {
 	_, err := rl.mu.UnlockContext(ctx)
-	return err
+	if err != nil {
+		if errors.Is(err, redsync.ErrLockAlreadyExpired) {
+			return nil
+		}
+
+		val, _ := rl.driver.GetHolder(ctx, rl.mu.Name())
+		return fmt.Errorf("Failed to revoke lease %s, expected value:%s, actual value:%s, error: %w\n", rl.mu.Name(), rl.mu.Value(), val, err)
+	}
+	return nil
 }
 
 func (rl *RedisLease) Extend(ctx context.Context) error {
 	ok, err := rl.mu.ExtendContext(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to extend lease %s, got error: %w", rl.mu.Name(), err)
+	}
 	if !ok {
-		// val, _ := rl.driver.redisGetAsync(ctx, rl.mu.Name())
-		// fmt.Printf("extend fail, name:%s, expected value:%s, actual value:%s, err:%s\n", rl.mu.Name(), rl.mu.Value(), err.Error())
-
-		lockErr := rl.mu.LockContext(ctx)
-		if lockErr == nil {
-			return nil
-		}
-		// val, _ = rl.driver.GetHolder(ctx, rl.mu.Name())
-		// fmt.Printf("TryLockContext fail, name:%s, expected value:%s, actual value:%s, err:%s\n", rl.mu.Name(), rl.mu.Value(), val, lockErr.Error())
-		// return lockErr
+		return fmt.Errorf("Failed to extend lease %s", rl.mu.Name())
 	}
 
-	return err
+	return nil
 }
 
 // RedisLeaseDriver implements LeaseDriver interface
