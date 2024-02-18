@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"k8s.io/kubernetes/pkg/util/node"
 
 	pb "election-agent/proto/election_agent/v1"
 
@@ -111,7 +110,7 @@ func (c *kubeClient) GetPods(namespace string, deployment string) (*pb.Pods, err
 			Status: &pb.PodStatus{
 				Phase:           string(pod.Status.Phase),
 				Reason:          pod.Status.Reason,
-				Terminating:     pod.DeletionTimestamp != nil && pod.Status.Reason != node.NodeUnreachablePodReason,
+				Terminating:     pod.DeletionTimestamp != nil && pod.Status.Reason != "NodeLost",
 				PodScheduled:    podCond(pod.Status.Conditions, corev1.PodScheduled),
 				PodInitialized:  podCond(pod.Status.Conditions, corev1.PodInitialized),
 				PodReady:        podCond(pod.Status.Conditions, corev1.PodReady),
