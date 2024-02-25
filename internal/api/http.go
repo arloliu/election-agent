@@ -32,7 +32,7 @@ func newElectionHTTPService(
 
 func (s *ElectionHTTPService) MountHandlers(router *gin.Engine) {
 	// election endpoints
-	router.GET("/election/:name", s.GetLeader)
+	router.GET("/election/:name", s.getLeader)
 	router.POST("/election/:name", s.campaign)
 	router.PATCH("/election/:name", s.extendElectedTerm)
 	router.DELETE("/election/:name", s.resign)
@@ -69,7 +69,7 @@ type ResignRequest struct {
 }
 
 // GET handler for /election/:name, get the name of the leader elected in the election
-func (s *ElectionHTTPService) GetLeader(c *gin.Context) {
+func (s *ElectionHTTPService) getLeader(c *gin.Context) {
 	election := c.Param("name")
 	if election == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "the election name is empty"})
@@ -78,6 +78,10 @@ func (s *ElectionHTTPService) GetLeader(c *gin.Context) {
 
 	leader, err := s.leaseMgr.GetLeaseHolder(s.ctx, election)
 	if err != nil {
+		if lease.IsUnavailableError(err) {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("No leader found for the election %s", election)})
 		return
 	}
@@ -101,6 +105,10 @@ func (s *ElectionHTTPService) campaign(c *gin.Context) {
 
 	err := s.leaseMgr.GrantLease(s.ctx, election, body.Candidate, time.Duration(body.Term)*time.Millisecond)
 	if err != nil {
+		if lease.IsUnavailableError(err) {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"elected": false, "leader": ""})
 		return
 	}
@@ -123,6 +131,10 @@ func (s *ElectionHTTPService) extendElectedTerm(c *gin.Context) {
 
 	err := s.leaseMgr.ExtendLease(s.ctx, election, body.Leader, time.Duration(body.Term)*time.Millisecond)
 	if err != nil {
+		if lease.IsUnavailableError(err) {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
 		return
 	}
@@ -146,6 +158,10 @@ func (s *ElectionHTTPService) resign(c *gin.Context) {
 
 	err := s.leaseMgr.RevokeLease(s.ctx, election, body.Leader)
 	if err != nil {
+		if lease.IsUnavailableError(err) {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
 		return
 	}

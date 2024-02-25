@@ -2,6 +2,8 @@ package lease
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -17,4 +19,17 @@ type LeaseDriver interface {
 	NewLease(name string, holder string, ttl time.Duration) Lease
 	GetHolder(ctx context.Context, name string) (string, error)
 	Shutdown(ctx context.Context) error
+}
+
+type UnavailableError struct {
+	Err error
+}
+
+func (e UnavailableError) Error() string {
+	return fmt.Errorf("service unavailable, error: %w", e.Err).Error()
+}
+
+func IsUnavailableError(err error) bool {
+	uerr := &UnavailableError{}
+	return errors.As(err, &uerr)
 }

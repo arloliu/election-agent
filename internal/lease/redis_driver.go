@@ -31,12 +31,25 @@ func (rl *RedisLease) ID() uint64 {
 }
 
 func (rl *RedisLease) Grant(ctx context.Context) error {
-	return rl.mu.TryLockContext(ctx)
+	err := rl.mu.TryLockContext(ctx)
+	if err == nil {
+		return nil
+	}
+
+	if isAllRedisDown(err, len(rl.driver.pools)) {
+		return &UnavailableError{Err: err}
+	}
+
+	return err
 }
 
 func (rl *RedisLease) Revoke(ctx context.Context) error {
 	_, err := rl.mu.UnlockContext(ctx)
 	if err != nil {
+		if isAllRedisDown(err, len(rl.driver.pools)) {
+			return &UnavailableError{Err: err}
+		}
+
 		if errors.Is(err, redsync.ErrLockAlreadyExpired) {
 			return nil
 		}
@@ -50,6 +63,10 @@ func (rl *RedisLease) Revoke(ctx context.Context) error {
 func (rl *RedisLease) Extend(ctx context.Context) error {
 	ok, err := rl.mu.ExtendContext(ctx)
 	if err != nil {
+		if isAllRedisDown(err, len(rl.driver.pools)) {
+			return &UnavailableError{Err: err}
+		}
+
 		return fmt.Errorf("Failed to extend lease %s, got error: %w", rl.mu.Name(), err)
 	}
 	if !ok {
@@ -114,7 +131,7 @@ func (rd *RedisLeaseDriver) NewLease(name string, holder string, ttl time.Durati
 		mu: rd.rs.NewMutex(
 			rd.redisKey(name),
 			redsync.WithExpiry(ttl),
-			redsync.WithTries(32),
+			redsync.WithTries(1),
 			redsync.WithSetNXOnExtend(),
 			redsync.WithTimeoutFactor(0.2),
 			redsync.WithValue(holder),
