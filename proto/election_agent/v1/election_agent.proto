@@ -2,6 +2,8 @@ syntax = "proto3";
 package grpc.election_agent.v1;
 option go_package = "election-agent/grpc/election_agent_v1";
 
+message Empty {}
+
 message BoolValue {
   bool value = 1;
 }
@@ -88,4 +90,14 @@ service Election {
   rpc Resign(ResignRequest) returns (BoolValue);
   rpc GetLeader(GetLeaderRequest) returns (StringValue);
   rpc GetPods(GetPodsRequest) returns (Pods);
+}
+
+message AgentState {
+  string state = 1;
+  bool zoom_enable = 2;
+}
+
+service Control {
+  rpc GetState(Empty) returns (AgentState);
+  rpc SetState(AgentState) returns (BoolValue);
 }

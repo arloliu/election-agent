@@ -1,4 +1,4 @@
-package lease
+package driver
 
 import (
 	"context"
@@ -17,21 +17,22 @@ import (
 	redsyncredis "github.com/go-redsync/redsync/v4/redis"
 )
 
-func NewMockRedisLeaseDriver(cfg *config.Config) *RedisLeaseDriver {
-	pools := []redsyncredis.Pool{NewMockPool(), NewMockPool(), NewMockPool()}
-	driver := &RedisLeaseDriver{
-		ctx:    context.TODO(),
-		cfg:    cfg,
-		pools:  pools,
-		quorum: len(pools)/2 + 1,
-		rs:     redsync.New(pools...),
-		hasher: maphash.NewHasher[string](),
+func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
+	pools := []redsyncredis.Pool{NewMockRedisPool(), NewMockRedisPool(), NewMockRedisPool()}
+	driver := &RedisKVDriver{
+		ctx:         context.TODO(),
+		cfg:         cfg,
+		originPools: pools,
+		pools:       pools,
+		quorum:      len(pools)/2 + 1,
+		rs:          redsync.New(pools...),
+		hasher:      maphash.NewHasher[string](),
 	}
 
 	return driver
 }
 
-func NewMockPool() *mockredis.MockPool {
+func NewMockRedisPool() *mockredis.MockPool {
 	type cacheItem struct {
 		val    string
 		active time.Time

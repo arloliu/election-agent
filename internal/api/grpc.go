@@ -2,11 +2,15 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"time"
 
+	"election-agent/internal/agent"
 	"election-agent/internal/config"
 	"election-agent/internal/kube"
 	"election-agent/internal/lease"
+	"election-agent/internal/zone"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -109,4 +113,46 @@ func (s *ElectionGRPCService) GetPods(ctx context.Context, req *pb.GetPodsReques
 		return nil, status.Errorf(codes.Unimplemented, "method GetPods not implemented")
 	}
 	return s.kubeClient.GetPods(req.Namespace, req.Deployment)
+}
+
+type ControlGRPCService struct {
+	pb.UnimplementedControlServer
+	cfg      *config.Config
+	leaseMgr *lease.LeaseManager
+	zoneMgr  zone.ZoneManager
+}
+
+func newControlGRPCService(cfg *config.Config, leaseMgr *lease.LeaseManager, zoneMgr zone.ZoneManager) *ControlGRPCService {
+	return &ControlGRPCService{cfg: cfg, leaseMgr: leaseMgr, zoneMgr: zoneMgr}
+}
+
+func (s *ControlGRPCService) GetState(ctx context.Context, req *pb.Empty) (*pb.AgentState, error) {
+	state, err := s.zoneMgr.GetAgentState()
+	if err != nil {
+		return &pb.AgentState{}, status.Errorf(codes.Unavailable, err.Error())
+	}
+
+	enable, err := s.zoneMgr.GetZoomEnable()
+	if err != nil {
+		return &pb.AgentState{State: state}, status.Errorf(codes.Unavailable, err.Error())
+	}
+
+	return &pb.AgentState{State: state, ZoomEnable: enable}, nil
+}
+
+func (s *ControlGRPCService) SetState(ctx context.Context, state *pb.AgentState) (*pb.BoolValue, error) {
+	if !slices.Contains(agent.ValidStates, state.State) {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid state:%s", state.State))
+	}
+	err := s.zoneMgr.SetAgentState(state.State)
+	if err != nil {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
+	}
+
+	err = s.zoneMgr.SetZoomEnable(state.ZoomEnable)
+	if err != nil {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
+	}
+
+	return &pb.BoolValue{Value: true}, nil
 }

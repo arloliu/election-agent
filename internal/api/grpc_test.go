@@ -18,15 +18,19 @@ func TestGRPCService(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
 	cfg := config.Config{
-		Env:      "test",
-		LogLevel: "debug",
-		GRPC:     config.GRPCConfig{Enable: true, Port: 18080},
-		HTTP:     config.HTTPConfig{Enable: false},
-		Redis: config.RedisConfig{
-			Prefix: "test_agent",
-		},
+		Env:          "test",
+		LogLevel:     "debug",
+		Name:         "test_election_agent",
+		DefaultState: "active",
+		KeyPrefix:    "test_agent",
+		GRPC:         config.GRPCConfig{Enable: true, Port: 18080},
+		HTTP:         config.HTTPConfig{Enable: false},
 		Lease: config.LeaseConfig{
 			CacheSize: 8192,
+		},
+		Zone: config.ZoneConfig{
+			Enable: false,
+			Name:   "zone1",
 		},
 	}
 
@@ -81,12 +85,10 @@ func TestGRPCService(t *testing.T) {
 func BenchmarkGRPCService(b *testing.B) {
 	ctx := context.TODO()
 	cfg := config.Config{
-		Env:      "test",
-		LogLevel: "warning",
-		GRPC:     config.GRPCConfig{Enable: true, Port: 18080},
-		Redis: config.RedisConfig{
-			Prefix: "test_agent",
-		},
+		Env:       "test",
+		LogLevel:  "warning",
+		KeyPrefix: "test_agent",
+		GRPC:      config.GRPCConfig{Enable: true, Port: 18080},
 		Lease: config.LeaseConfig{
 			CacheSize: 8192,
 		},

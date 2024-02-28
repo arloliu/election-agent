@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +27,14 @@ func TestConfig(t *testing.T) {
 
 	t.Setenv("EA_KUBE_IN_CLUSTER", "false")
 
+	t.Setenv("EA_ZONE_ENABLE", "true")
+	t.Setenv("EA_ZONE_NAME", "zone1")
+	t.Setenv("EA_ZONE_CHECK_INTERVAL", "1s")
+	t.Setenv("EA_ZONE_COORDINATOR_URL", "localhost:9000")
+	t.Setenv("EA_ZONE_COORDINATOR_TIMEOUT", "3s")
+	t.Setenv("EA_ZONE_PEER_URLS", "localhost:8082")
+	t.Setenv("EA_ZONE_PEER_TIMEOUT", "500ms")
+
 	err := Init()
 	require.NoError(err)
 
@@ -47,4 +56,12 @@ func TestConfig(t *testing.T) {
 	require.Equal(1234, cfg.Lease.CacheSize)
 
 	require.Equal(false, cfg.Kube.InCluster)
+
+	require.Equal(true, cfg.Zone.Enable)
+	require.Equal("zone1", cfg.Zone.Name)
+	require.Equal(time.Second, cfg.Zone.CheckInterval)
+	require.Equal("localhost:9000", cfg.Zone.CoordinatorURL)
+	require.Equal(3*time.Second, cfg.Zone.CoordinatorTimeout)
+	require.Equal([]string{"localhost:8082"}, cfg.Zone.PeerURLs)
+	require.Equal(500*time.Millisecond, cfg.Zone.PeerTimeout)
 }

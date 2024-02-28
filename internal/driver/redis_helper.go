@@ -1,4 +1,4 @@
-package lease
+package driver
 
 import (
 	"errors"
@@ -8,28 +8,16 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
-func isAllRedisDown(err error, redisCount int) bool {
-	if err == nil {
-		return false
+func boolStr(val bool) string {
+	if val {
+		return "true"
+	} else {
+		return "false"
 	}
+}
 
-	merr := getMultiError(err)
-	if merr == nil {
-		return false
-	}
-
-	if merr.Len() < redisCount {
-		return false
-	}
-
-	n := 0
-	for _, err := range merr.Errors {
-		if isNetOpError(err) {
-			n++
-		}
-	}
-
-	return n == redisCount
+func isBoolStrTrue(val string) bool {
+	return val == "true"
 }
 
 func getMultiError(err error) *multierror.Error {

@@ -13,6 +13,7 @@ import (
 	"election-agent/internal/kube"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
+	"election-agent/internal/zone"
 
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
@@ -33,11 +34,12 @@ type Server struct {
 	grpcServer        *grpc.Server
 	grpcHealthService *health.Server
 	leaseMgr          *lease.LeaseManager
+	zoneMgr           zone.ZoneManager
 	kubeClient        kube.KubeClient
 	ready             chan bool
 }
 
-func NewServer(ctx context.Context, cfg *config.Config, leaseMgr *lease.LeaseManager, kubeClient kube.KubeClient) *Server {
+func NewServer(ctx context.Context, cfg *config.Config, leaseMgr *lease.LeaseManager, zoneMgr zone.ZoneManager, kubeClient kube.KubeClient) *Server {
 	readyChanSize := 0
 	if cfg.GRPC.Enable {
 		readyChanSize++
@@ -50,6 +52,7 @@ func NewServer(ctx context.Context, cfg *config.Config, leaseMgr *lease.LeaseMan
 		ctx:        ctx,
 		cfg:        cfg,
 		leaseMgr:   leaseMgr,
+		zoneMgr:    zoneMgr,
 		kubeClient: kubeClient,
 		ready:      make(chan bool, readyChanSize),
 	}
@@ -80,8 +83,10 @@ func (srv *Server) startGRPC() error {
 	}
 
 	srv.grpcServer = grpc.NewServer()
-	grpcService := newElectionGRPCService(srv.cfg, srv.leaseMgr, srv.kubeClient)
-	eagrpc.RegisterElectionServer(srv.grpcServer, grpcService)
+	electionService := newElectionGRPCService(srv.cfg, srv.leaseMgr, srv.kubeClient)
+	controlService := newControlGRPCService(srv.cfg, srv.leaseMgr, srv.zoneMgr)
+	eagrpc.RegisterElectionServer(srv.grpcServer, electionService)
+	eagrpc.RegisterControlServer(srv.grpcServer, controlService)
 
 	srv.grpcHealthService = health.NewServer()
 	if srv.grpcHealthService == nil {

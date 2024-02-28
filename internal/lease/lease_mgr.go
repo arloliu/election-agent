@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"election-agent/internal/agent"
 	"election-agent/internal/config"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -12,11 +13,12 @@ import (
 type LeaseManager struct {
 	ctx    context.Context
 	cfg    *config.Config
-	driver LeaseDriver
+	state  *agent.State
+	driver KVDriver
 	cache  *lru.TwoQueueCache[uint64, Lease]
 }
 
-func NewLeaseManager(ctx context.Context, cfg *config.Config, driver LeaseDriver) *LeaseManager {
+func NewLeaseManager(ctx context.Context, cfg *config.Config, driver KVDriver) *LeaseManager {
 	var cache *lru.TwoQueueCache[uint64, Lease]
 	if cfg.Lease.Cache {
 		size := cfg.Lease.CacheSize
@@ -26,12 +28,16 @@ func NewLeaseManager(ctx context.Context, cfg *config.Config, driver LeaseDriver
 		cache, _ = lru.New2Q[uint64, Lease](size)
 	}
 
-	return &LeaseManager{
+	mgr := &LeaseManager{
 		ctx:    ctx,
 		cfg:    cfg,
+		state:  agent.NewState(cfg.DefaultState, cfg.StateCacheTTL),
 		driver: driver,
 		cache:  cache,
 	}
+	mgr.state.Store(cfg.DefaultState)
+
+	return mgr
 }
 
 func (lm *LeaseManager) GetLease(ctx context.Context, name string, holder string, ttl time.Duration) Lease {
@@ -50,11 +56,25 @@ func (lm *LeaseManager) GetLease(ctx context.Context, name string, holder string
 }
 
 func (lm *LeaseManager) GrantLease(ctx context.Context, name string, holder string, ttl time.Duration) error {
+	state := lm.GetState()
+	if state == agent.UnavailableState {
+		return ErrServiceUnavalable
+	} else if state == agent.StandbyState {
+		return ErrAgentStandby
+	}
+
 	lease := lm.GetLease(ctx, name, holder, ttl)
 	return lease.Grant(ctx)
 }
 
 func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, holder string) error {
+	state := lm.GetState()
+	if state == agent.UnavailableState {
+		return ErrServiceUnavalable
+	} else if state == agent.StandbyState {
+		return ErrAgentStandby
+	}
+
 	lease := lm.GetLease(ctx, name, holder, 0)
 	if lm.cfg.Lease.Cache {
 		lm.cache.Remove(lease.ID())
@@ -63,12 +83,39 @@ func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, holder str
 }
 
 func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, holder string, ttl time.Duration) error {
+	state := lm.GetState()
+	if state == agent.UnavailableState {
+		return ErrServiceUnavalable
+	} else if state == agent.StandbyState {
+		return ErrAgentStandby
+	}
+
 	lease := lm.GetLease(ctx, name, holder, ttl)
 	return lease.Extend(ctx)
 }
 
 func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string) (string, error) {
 	return lm.driver.GetHolder(ctx, name)
+}
+
+func (lm *LeaseManager) GetState() string {
+	state := lm.state.Load()
+	if state == "" {
+		var err error
+		state, err = lm.driver.Get(lm.ctx, lm.cfg.AgentInfoKey(agent.StateKey), false)
+		if err != nil {
+			lm.state.Store(agent.UnavailableState)
+			return agent.UnavailableState
+		}
+		lm.state.Store(state)
+		return lm.state.Load()
+	}
+
+	return state
+}
+
+func (lm *LeaseManager) SetState(state string) {
+	lm.state.Store(state)
 }
 
 func (lm *LeaseManager) Ready() bool {

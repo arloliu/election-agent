@@ -255,3 +255,130 @@ var Election_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "election_agent/v1/election_agent.proto",
 }
+
+const (
+	Control_GetState_FullMethodName = "/grpc.election_agent.v1.Control/GetState"
+	Control_SetState_FullMethodName = "/grpc.election_agent.v1.Control/SetState"
+)
+
+// ControlClient is the client API for Control service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ControlClient interface {
+	GetState(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AgentState, error)
+	SetState(ctx context.Context, in *AgentState, opts ...grpc.CallOption) (*BoolValue, error)
+}
+
+type controlClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewControlClient(cc grpc.ClientConnInterface) ControlClient {
+	return &controlClient{cc}
+}
+
+func (c *controlClient) GetState(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AgentState, error) {
+	out := new(AgentState)
+	err := c.cc.Invoke(ctx, Control_GetState_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlClient) SetState(ctx context.Context, in *AgentState, opts ...grpc.CallOption) (*BoolValue, error) {
+	out := new(BoolValue)
+	err := c.cc.Invoke(ctx, Control_SetState_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ControlServer is the server API for Control service.
+// All implementations must embed UnimplementedControlServer
+// for forward compatibility
+type ControlServer interface {
+	GetState(context.Context, *Empty) (*AgentState, error)
+	SetState(context.Context, *AgentState) (*BoolValue, error)
+	mustEmbedUnimplementedControlServer()
+}
+
+// UnimplementedControlServer must be embedded to have forward compatible implementations.
+type UnimplementedControlServer struct {
+}
+
+func (UnimplementedControlServer) GetState(context.Context, *Empty) (*AgentState, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetState not implemented")
+}
+func (UnimplementedControlServer) SetState(context.Context, *AgentState) (*BoolValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetState not implemented")
+}
+func (UnimplementedControlServer) mustEmbedUnimplementedControlServer() {}
+
+// UnsafeControlServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ControlServer will
+// result in compilation errors.
+type UnsafeControlServer interface {
+	mustEmbedUnimplementedControlServer()
+}
+
+func RegisterControlServer(s grpc.ServiceRegistrar, srv ControlServer) {
+	s.RegisterService(&Control_ServiceDesc, srv)
+}
+
+func _Control_GetState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServer).GetState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Control_GetState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServer).GetState(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Control_SetState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AgentState)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServer).SetState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Control_SetState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServer).SetState(ctx, req.(*AgentState))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Control_ServiceDesc is the grpc.ServiceDesc for Control service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Control_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.election_agent.v1.Control",
+	HandlerType: (*ControlServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetState",
+			Handler:    _Control_GetState_Handler,
+		},
+		{
+			MethodName: "SetState",
+			Handler:    _Control_SetState_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "election_agent/v1/election_agent.proto",
+}

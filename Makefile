@@ -1,7 +1,7 @@
 # Targets
 build: clean bins
 
-bins: build-election-agent
+bins: build-election-agent build-zone-coordinator
 
 all: update-tools generate clean bins test
 
@@ -16,6 +16,7 @@ GOOS        ?= $(shell go env GOOS)
 GOARCH      ?= $(shell go env GOARCH)
 GOPATH      ?= $(shell go env GOPATH)
 CGO_ENABLED ?= 0
+LDFLAGS ?= -ldflags="-s -w"
 LDFLAGS ?= -ldflags="-s -w"
 
 V ?= 0
@@ -45,17 +46,24 @@ SUMMARY_COVER_PROFILE      := $(COVER_ROOT)/summary.out
 
 # Programs
 run:
-	@go run ./cmd/election-agent
+	@GOEXPERIMENT=loopvar go run ./cmd/election-agent
+
+run-zone-coordinator:
+	@GOEXPERIMENT=loopvar go run ./cmd/zone-coordinator
 
 # Build
 build-election-agent: $(ALL_SRC)
 	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
-	CGO_ENABLED=$(CGO_ENABLED) go build -tags production $(LDFLAGS) -o election-agent ./cmd/election-agent
+	GOEXPERIMENT=loopvar CGO_ENABLED=$(CGO_ENABLED) go build -tags production $(LDFLAGS) -o election-agent ./cmd/election-agent
+
+build-zone-coordinator: $(ALL_SRC)
+	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
+	GOEXPERIMENT=loopvar CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -o zone-coordinator ./cmd/zone-coordinator
 
 # Clean
 clean-bins:
 	@printf "Delete old binaries...\n"
-	@rm -f election-agent
+	@rm -f election-agent zone-coordinator
 
 # Generate targets
 mock-gen:

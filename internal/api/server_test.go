@@ -7,9 +7,11 @@ import (
 	"testing"
 
 	"election-agent/internal/config"
+	"election-agent/internal/driver"
 	"election-agent/internal/kube"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
+	"election-agent/internal/zone"
 )
 
 func TestMain(m *testing.M) {
@@ -28,7 +30,7 @@ func TestMain(m *testing.M) {
 }
 
 func startMockServer(ctx context.Context, cfg *config.Config) (*Server, error) {
-	driver := lease.NewMockRedisLeaseDriver(cfg)
+	driver := driver.NewMockRedisKVDriver(cfg)
 	if driver == nil {
 		return nil, errors.New("failed to create mock redis leader driver")
 	}
@@ -38,8 +40,12 @@ func startMockServer(ctx context.Context, cfg *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	zoneMgr, err := zone.NewZoneManager(ctx, cfg, driver, mgr)
+	if err != nil {
+		return nil, err
+	}
 
-	apiServer := NewServer(ctx, cfg, mgr, kubeClient)
+	apiServer := NewServer(ctx, cfg, mgr, zoneMgr, kubeClient)
 	if apiServer == nil {
 		return nil, errors.New("failed to create API server")
 	}

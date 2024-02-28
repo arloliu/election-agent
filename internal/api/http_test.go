@@ -21,15 +21,19 @@ func TestHTTPService(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
 	cfg := config.Config{
-		Env:      "test",
-		LogLevel: "debug",
-		GRPC:     config.GRPCConfig{Enable: false},
-		HTTP:     config.HTTPConfig{Enable: true, Port: 18080},
-		Redis: config.RedisConfig{
-			Prefix: "test_agent",
-		},
+		Env:          "test",
+		LogLevel:     "debug",
+		Name:         "test_election_agent",
+		DefaultState: "active",
+		KeyPrefix:    "test_agent",
+		GRPC:         config.GRPCConfig{Enable: false},
+		HTTP:         config.HTTPConfig{Enable: true, Port: 18080},
 		Lease: config.LeaseConfig{
 			CacheSize: 8192,
+		},
+		Zone: config.ZoneConfig{
+			Enable: false,
+			Name:   "zone1",
 		},
 	}
 

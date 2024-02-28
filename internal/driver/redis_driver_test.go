@@ -1,4 +1,4 @@
-package lease
+package driver
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestRedisLeaseDriver_parseRedisURLs_single(t *testing.T) {
+func TestRedisKVDriver_parseRedisURLs_single(t *testing.T) {
 	require := require.New(t)
 	cfg := config.Config{
 		Redis: config.RedisConfig{
@@ -53,7 +53,7 @@ func TestRedisLeaseDriver_parseRedisURLs_single(t *testing.T) {
 	}
 }
 
-func TestRedisLeaseDriver_parseRedisURLs_cluster(t *testing.T) {
+func TestRedisKVDriver_parseRedisURLs_cluster(t *testing.T) {
 	require := require.New(t)
 	cfg := config.Config{
 		Redis: config.RedisConfig{
@@ -81,7 +81,7 @@ func TestRedisLeaseDriver_parseRedisURLs_cluster(t *testing.T) {
 	}
 }
 
-func TestRedisLeaseDriver_getMostFreqVal(t *testing.T) {
+func TestRedisKVDriver_getMostFreqVal(t *testing.T) {
 	require := require.New(t)
 
 	strs := make([]string, 0, 1000)
@@ -101,10 +101,10 @@ func TestRedisLeaseDriver_getMostFreqVal(t *testing.T) {
 	require.Equal(600, freq)
 }
 
-func TestRedisLeaseDriver_mocks(t *testing.T) {
+func TestRedisKVDriver_mocks(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
-	mockPool := NewMockPool()
+	mockPool := NewMockRedisPool()
 
 	conn, _ := mockPool.Get(ctx)
 	require.NotNil(conn)
@@ -138,22 +138,22 @@ func TestRedisLeaseDriver_mocks(t *testing.T) {
 	require.LessOrEqual(ttl, time.Second)
 }
 
-func TestRedisLeaseDriver_redisGetAsync(t *testing.T) {
+func TestRedisKVDriver_redisGetAsync(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
-	driver := NewMockRedisLeaseDriver(&config.Config{})
+	driver := NewMockRedisKVDriver(&config.Config{})
 
 	poolSet(driver, require, "key1", "val1")
-	val, err := driver.redisGetAsync(ctx, "key1")
+	val, err := driver.redisGetAsync(ctx, "key1", true)
 	require.NoError(err)
 	require.Equal("val1", val)
 
-	val, err = driver.redisGetAsync(ctx, "key2")
+	val, err = driver.redisGetAsync(ctx, "key2", true)
 	require.Error(err)
 	require.Equal("", val)
 }
 
-func poolSet(driver *RedisLeaseDriver, require *require.Assertions, key string, val string) {
+func poolSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
 	for _, pool := range driver.pools {
 		conn, err := pool.Get(driver.ctx)
 		require.NoError(err)
@@ -164,7 +164,7 @@ func poolSet(driver *RedisLeaseDriver, require *require.Assertions, key string, 
 	}
 }
 
-func TestRedisLeaseDriver_server_nonexist(t *testing.T) {
+func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	require := require.New(t)
 
 	ctx := context.TODO()
@@ -175,8 +175,8 @@ func TestRedisLeaseDriver_server_nonexist(t *testing.T) {
 		},
 	}
 
-	driver, err := NewRedisLeaseDriver(ctx, &cfg)
-	require.NoError(err)
+	driver, err := NewRedisKVDriver(ctx, &cfg)
+	require.Error(err)
 	require.NotNil(driver)
 
 	for _, client := range driver.clients {
@@ -192,5 +192,5 @@ func TestRedisLeaseDriver_server_nonexist(t *testing.T) {
 	require.NotNil(lease)
 
 	err = lease.Grant(ctx)
-	require.ErrorContains(err, "failed to acquire lock")
+	require.ErrorContains(err, "service unavailable")
 }

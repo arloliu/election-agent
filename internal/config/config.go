@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -20,17 +21,44 @@ type Config struct {
 	// Possible values: `debug`, `info`, `warning`, `error`, `panic`, `fatal`.
 	LogLevel string `default:"info" split_words:"true" yaml:"log_level"`
 
+	// The name of election agent. It's required when `Zone.Enable` is `true`
+	Name string `yaml:"name"`
+
+	// Prefix specifies the key prefix.
+	// The lease key will be formatted as `[cfg.KeyPrefix]/lease/<lease name>`.
+	// The agent info key will be formatted as `[cfg.KeyPrefix]/info/[cfg.Name]/<field name>`.
+	// Defaults to `ela`.
+	KeyPrefix string `default:"ela" yaml:"prefix"`
+
+	// The default state. Set this field in each agent for active-active or active-standby mode
+	// Defaults to `active`
+	// Possible values: `active`, `standby`, `unavailable`
+	DefaultState string `default:"active" yaml:"default_state"`
+	// The state cache TTL, set it to zero for disabling state cache.
+	// Defaults to `1s`.
+	StateCacheTTL time.Duration `default:"1s" split_words:"true" yaml:"state_cache_ttl"`
+
 	Kube KubeConfing `yaml:"kube"` // K8S related settings.
 	GRPC GRPCConfig  `yaml:"grpc"` // gRPC service related settings.
 	HTTP HTTPConfig  `yaml:"http"` // HTTP service related settings.
 
 	Lease LeaseConfig `yaml:"lease"` // Lease related settings.
 
+	Zone ZoneConfig `yaml:"zone"` // K8S multi-zone related settings.
+
 	// Driver indicates the lease driver, currently only supports `redis` driver.
 	// Defaults to `redis`.
 	Driver string `default:"redis" yaml:"driver"`
 	// Redis related settings, it only take effects when the driver is `redis`.
 	Redis RedisConfig `yaml:"redis"`
+}
+
+func (cfg *Config) LeaseKey(lease string) string {
+	return cfg.KeyPrefix + "/lease/" + lease
+}
+
+func (cfg *Config) AgentInfoKey(field string) string {
+	return cfg.KeyPrefix + "/info/" + cfg.Name + "/" + field
 }
 
 // Kubernetes related settings
@@ -55,9 +83,6 @@ type RedisConfig struct {
 	// Defaults to `single``.
 	// Possible values: `single`,`cluster`,`failover`.
 	Mode string `default:"single" yaml:"mode"`
-	// Prefix specifies the redis key prefix, the lease key will be formatted as `[prefix]/[lease name]``.
-	// Defaults to `ela`.
-	Prefix string `default:"ela" yaml:"prefix"`
 
 	// URLs is a list of redis servers.
 	//
@@ -67,6 +92,12 @@ type RedisConfig struct {
 	//
 	// Cluster mode: the url format of each redis server is: `redis://<user>:<password>@<host>:<port>?addr=<host2>:<port2>&addr=<host3>:<port3>`.
 	URLs []string `yaml:"urls"`
+
+	// Primary specifies which one is the primary Redis server in the "URLS" field.
+	// The primary redis server is the only redis server used by the agent when it enters orphan(standalone) mode.
+	// Defaults to `0`.
+	Primary int `default:"0" yaml:"primary_index"`
+
 	// Master is the redis master name, it only take effects when the 'mode' is "failover"(sentinel)
 	Master string `yaml:"master"`
 }
@@ -77,6 +108,35 @@ type LeaseConfig struct {
 	Cache bool `default:"false" split_words:"true" yaml:"cache"`
 	// The size of caching pool. It only take effects when 'Cache' is true
 	CacheSize int `default:"8192" split_words:"true" yaml:"cache_size"`
+}
+
+type ZoneConfig struct {
+	// Whether to enable multi-zone feature.
+	// It's the initial value when the agent starts, and it will be changed by API request.
+	// Defaults to `false`.
+	Enable bool `default:"false" yaml:"enable"`
+	// The name of zone where the election agent resides.
+	Name string `yaml:"name"`
+	// StateKeyPrefix specifies the key prefix of state that election agent stores in the backend.
+	// The full key name will be: `<Zone.StateKeyPrefix>/<Name>`
+	// Defaults to `ela_state`.
+	StateKeyPrefix string `default:"ela_state" split_words:"true" yaml:"state_key_prefix"`
+
+	// The zone health check interval.
+	// Defaults to `10s`.
+	CheckInterval time.Duration `default:"10s" split_words:"true" yaml:"coordinator_timeout"`
+
+	// The zone coordinator's url.
+	CoordinatorURL string `split_words:"true" yaml:"coordinator_url"`
+	// The request timeout of zone coordinator.
+	// Defaults to `1s`.
+	CoordinatorTimeout time.Duration `default:"1s" split_words:"true" yaml:"coordinator_timeout"`
+
+	// A list of election agent peer gRPC URLs.
+	PeerURLs []string `envconfig:"EA_ZONE_PEER_URLS" yaml:"peer_urls"`
+	// The request timeout of peer.
+	// Defaults to `1s`.
+	PeerTimeout time.Duration `default:"1s" split_words:"true" yaml:"peer_timeout"`
 }
 
 var Default *Config
