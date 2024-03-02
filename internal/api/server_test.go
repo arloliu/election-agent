@@ -36,9 +36,14 @@ func startMockServer(ctx context.Context, cfg *config.Config) (*Server, error) {
 	}
 
 	mgr := lease.NewLeaseManager(ctx, cfg, driver)
-	kubeClient, err := kube.NewKubeClient(ctx, cfg)
-	if err != nil {
-		return nil, err
+
+	var kubeClient kube.KubeClient
+	if cfg.Kube.Enable {
+		var err error
+		kubeClient, err = kube.NewKubeClient(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 	zoneMgr, err := zone.NewZoneManager(ctx, cfg, driver, mgr)
 	if err != nil {
