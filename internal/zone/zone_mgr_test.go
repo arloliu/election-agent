@@ -13,6 +13,7 @@ import (
 	"election-agent/internal/logging"
 	eagrpc "election-agent/proto/election_agent/v1"
 
+	mock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,9 +48,9 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 			PeerURLs:       []string{"fake_peer"},
 		},
 	}
-	mgr, err := newMockZoneManager(ctx, cfg)
+	m, err := newMockZoneManager(ctx, cfg)
 	require.NoError(err)
-	require.NotNil(mgr)
+	require.NotNil(m)
 
 	status := &zoneStatus{
 		zoomEnable:    true,
@@ -60,14 +61,14 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 		mode:          agent.NormalMode,
 		state:         agent.ActiveState,
 	}
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
 
 	// the activeZone is different, should be standby state
 	status.zcConnected = true
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -75,7 +76,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// the ZC is disconnected & peer is standby, should be standby->active
 	status.zcConnected = false
 	status.peerConnected = true
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -83,7 +84,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// ZC & peer are disconnected, should be active->standby & normal->orhpan
 	status.zcConnected = false
 	status.peerConnected = false
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.OrphanMode, status.newMode)
 	updateStatus(status)
@@ -91,7 +92,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// the peer back & peer is standby, should be standby->active & orhpan->normal
 	status.zcConnected = false
 	status.peerConnected = true
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -99,7 +100,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// ZC back, change to current zone, should be active->active
 	status.zcConnected = true
 	status.activeZone = "test-zone1"
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -107,7 +108,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// ZC change to another zone, should be active->standby
 	status.zcConnected = true
 	status.activeZone = "test-zone2"
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -115,13 +116,13 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// ZC & peer are disconnected, should be standby->active & normal->orhpan
 	status.zcConnected = false
 	status.peerConnected = false
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.OrphanMode, status.newMode)
 	updateStatus(status)
 
 	// continuously in orhpan mode , keep active state
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.OrphanMode, status.newMode)
 	updateStatus(status)
@@ -130,7 +131,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	status.zcConnected = false
 	status.peerConnected = true
 	status.peerStates = []*eagrpc.AgentState{{State: agent.ActiveState, ZoomEnable: true}}
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -139,7 +140,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	status.zcConnected = false
 	status.peerConnected = false
 	status.peerStates = []*eagrpc.AgentState{{State: agent.ActiveState, ZoomEnable: true}}
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.OrphanMode, status.newMode)
 	updateStatus(status)
@@ -147,7 +148,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// ZC back, change to current zone, should be keep active, orphan->normal
 	status.zcConnected = true
 	status.activeZone = "test-zone1"
-	mgr.Check(status)
+	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
@@ -160,39 +161,57 @@ func updateStatus(status *zoneStatus) {
 	status.newMode = ""
 }
 
-func newMockZoneManager(ctx context.Context, cfg *config.Config) (ZoneManager, error) {
-	driver := driver.NewMockRedisKVDriver(cfg)
-	if driver == nil {
-		return nil, errors.New("driver is nil")
+type mockComponent struct {
+	zm       ZoneManager
+	mockZm   *MockZoneManager
+	lm       *lease.LeaseManager
+	kvDriver lease.KVDriver
+}
+
+func newMockZoneManager(ctx context.Context, cfg *config.Config) (*mockComponent, error) {
+	m := mockComponent{}
+
+	m.kvDriver = driver.NewMockRedisKVDriver(cfg)
+	if m.kvDriver == nil {
+		return nil, errors.New("m.kvDriver is nil")
 	}
 
-	leaseMgr := lease.NewLeaseManager(ctx, cfg, driver)
-	if leaseMgr == nil {
+	m.lm = lease.NewLeaseManager(ctx, cfg, m.kvDriver)
+	if m.lm == nil {
 		return nil, errors.New("lease manager is nil")
 	}
-	zoneMgr, err := NewZoneManager(ctx, cfg, driver, leaseMgr)
+
+	var err error
+	m.zm, err = NewZoneManager(ctx, cfg, m.kvDriver, m.lm)
 	if err != nil {
 		return nil, err
 	}
-	return zoneMgr, nil
-	// mockMgr := &MockZoneManager{}
+	// return zoneMgr, nil
+	mockMgr := &MockZoneManager{}
 
-	// mockMgr.On("Check", mock.Anything).
-	// 	Run(func(args mock.Arguments) {
-	// 		status, _ := args.Get(0).(*zoneStatus)
-	// 		zoneMgr.Check(status)
-	// 	})
-	// mockMgr.On("Shutdown", mock.Anything).Return(zoneMgr.Shutdown(ctx))
-	// mockMgr.On("GetAgentState").Return(zoneMgr.GetAgentState())
-	// mockMgr.On("SetAgentState", mock.AnythingOfType("string")).
-	// 	Return(func(state string) error {
-	// 		return zoneMgr.SetAgentState(state)
-	// 	})
-	// mockMgr.On("GetZoomEnable").Return(zoneMgr.GetZoomEnable())
-	// mockMgr.On("SetZoomEnable", mock.AnythingOfType("bool")).
-	// 	Return(func(enable bool) error {
-	// 		return zoneMgr.SetZoomEnable(enable)
-	// 	})
+	mockMgr.On("GetMode").Return(func() string {
+		return m.zm.GetMode()
+	})
+	mockMgr.On("SetMode", mock.AnythingOfType("string")).
+		Run(func(args mock.Arguments) {
+			mode, _ := args.Get(0).(string)
+			m.zm.SetMode(mode)
+		})
 
-	// return mockMgr, nil
+	mockMgr.On("SetPeerStates", mock.AnythingOfType("string")).Return(nil)
+	mockMgr.On("SetAgentState", mock.AnythingOfType("string")).
+		Return(func(state string) error {
+			return m.zm.SetAgentState(state)
+		})
+	mockMgr.On("GetZoomEnable").
+		Return(func() (bool, error) {
+			return m.zm.GetZoomEnable()
+		})
+	mockMgr.On("SetZoomEnable", mock.AnythingOfType("bool")).
+		Return(func(enable bool) error {
+			return m.zm.SetZoomEnable(enable)
+		})
+
+	m.mockZm = mockMgr
+	return &m, nil
 }

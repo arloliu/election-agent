@@ -3,6 +3,7 @@ package zone
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -26,7 +27,8 @@ const ZoneEnableKey = "zone_enable"
 type ZoneManager interface {
 	Start() error
 	Shutdown(ctx context.Context) error
-	Check(status *zoneStatus)
+	GetMode() string
+	SetMode(mode string)
 	GetActiveZone() (string, error)
 	GetPeerStates() ([]*eagrpc.AgentState, error)
 	SetPeerStates(state string) error
@@ -152,7 +154,7 @@ func (zm *zoneManager) Start() error {
 			select {
 			case <-zm.ticker.C:
 				status := zm.getZoneStatus()
-				zm.Check(status)
+				Check(status, zm.cfg, zm.driver, zm, zm.leaseMgr)
 
 			case <-zm.ctx.Done():
 				return
@@ -170,100 +172,12 @@ func (zm *zoneManager) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (zm *zoneManager) Check(status *zoneStatus) {
-	if !status.zoomEnable {
-		return
-	}
+func (zm *zoneManager) GetMode() string {
+	return zm.mode
+}
 
-	var err error
-
-	if status.zcConnected {
-		status.newMode = agent.NormalMode
-
-		if zm.cfg.Zone.Name == status.activeZone {
-			status.newState = agent.ActiveState
-		} else {
-			status.newState = agent.StandbyState
-		}
-	} else if status.peerConnected { // failed to connect to zone coordinator, but some peers are alive
-		status.newMode = agent.NormalMode
-
-		peerActive := false
-		for _, peerState := range status.peerStates {
-			if peerState.State == agent.ActiveState {
-				peerActive = true
-				break
-			}
-		}
-
-		if peerActive {
-			status.newState = agent.StandbyState
-		} else {
-			status.newState = agent.ActiveState
-		}
-	} else { // orphan mode
-		status.newMode = agent.OrphanMode
-
-		if zm.mode != agent.OrphanMode {
-			status.newState = agent.FlipState(status.state)
-		} else {
-			status.newState = status.state
-		}
-	}
-
-	// 1. change agent mode
-	logging.Infow("Change agent mode",
-		"agent", zm.cfg.Name,
-		"zone", zm.cfg.Zone.Name,
-		"mode", status.mode+"/"+status.newMode,
-	)
-	// change driver mode first to update driver's nodes
-	err = zm.driver.SetAgentMode(status.newMode)
-	if err != nil {
-		logging.Errorw("Failed to set agent mode",
-			"agent", zm.cfg.Name,
-			"zone", zm.cfg.Zone.Name,
-			"mode", status.newMode,
-			"error", err,
-		)
-	}
-	// update mode in local instance
-	zm.mode = status.newMode
-
-	// 2. notify agent peers to enter standby mode if this agent becomes active one
-	if status.newState == agent.ActiveState && status.peerConnected {
-		err := zm.SetPeerStates(agent.StandbyState)
-		if err != nil {
-			logging.Errorw("Failed to notify agent peers to enter standby mode",
-				"agent", zm.cfg.Name,
-				"zone", zm.cfg.Zone.Name,
-				"error", err,
-			)
-		}
-	}
-
-	// 3. update agent state
-	err = zm.SetAgentState(status.newState)
-	if err != nil {
-		logging.Errorw("Failed to update agent state",
-			"agent", zm.cfg.Name,
-			"zone", zm.cfg.Zone.Name,
-			"state", status.newState,
-			"error", err,
-		)
-	}
-
-	// 4. notify lease manager to update agent state cache
-	zm.leaseMgr.SetState(status.newState)
-
-	logging.Debugw("Zoom status",
-		"zoomEnable", status.zoomEnable,
-		"zcConnected", status.zcConnected,
-		"peerConnected", status.peerConnected,
-		"state", status.state+"->"+status.newState,
-		"mode", status.mode+"->"+status.newMode,
-		"activeZone", status.activeZone,
-	)
+func (zm *zoneManager) SetMode(mode string) {
+	zm.mode = mode
 }
 
 func (zm *zoneManager) GetActiveZone() (string, error) {
@@ -423,4 +337,108 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	}
 
 	return status
+}
+
+// Check zone and peers status and set proper agent state and mode.
+// This method is seperated from zoneManager to support unit testing.
+func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm ZoneManager, lm *lease.LeaseManager) {
+	if !status.zoomEnable {
+		return
+	}
+
+	var err error
+	localAgentMode := zm.GetMode()
+
+	if status.zcConnected {
+		status.newMode = agent.NormalMode
+
+		if cfg.Zone.Name == status.activeZone {
+			status.newState = agent.ActiveState
+		} else {
+			status.newState = agent.StandbyState
+		}
+	} else if status.peerConnected { // failed to connect to zone coordinator, but some peers are alive
+		status.newMode = agent.NormalMode
+
+		peerActive := false
+		for _, peerState := range status.peerStates {
+			if peerState.State == agent.ActiveState {
+				peerActive = true
+				break
+			}
+		}
+
+		if peerActive {
+			status.newState = agent.StandbyState
+		} else {
+			status.newState = agent.ActiveState
+		}
+	} else { // orphan mode
+		status.newMode = agent.OrphanMode
+
+		if localAgentMode != agent.OrphanMode {
+			status.newState = agent.FlipState(status.state)
+		} else {
+			status.newState = status.state
+		}
+	}
+
+	// 1. change agent mode
+	if status.mode != status.newMode || localAgentMode != status.newMode {
+		logging.Infow("Change agent mode",
+			"agent", cfg.Name,
+			"zone", cfg.Zone.Name,
+			"remote_agent_mode", status.mode,
+			"local_agent_mode", localAgentMode,
+			"new_mode", status.newMode,
+		)
+		// change the mode stored in kv store to update the mode of other agent replicas.
+		// other agent replicas will use `GetAgentMode` to retreive the mode.
+		err = kvDriver.SetAgentMode(status.newMode)
+		if err != nil {
+			logging.Errorw("Failed to set agent mode",
+				"agent", cfg.Name,
+				"zone", cfg.Zone.Name,
+				"mode", status.newMode,
+				"error", err,
+			)
+		}
+		// update local agent's mode
+		zm.SetMode(status.newMode)
+	}
+
+	// 2. notify agent peers to enter standby mode if this agent becomes active one
+	if status.newState == agent.ActiveState && status.peerConnected {
+		err := zm.SetPeerStates(agent.StandbyState)
+		if err != nil {
+			logging.Errorw("Failed to notify agent peers to enter standby mode",
+				"agent", cfg.Name,
+				"zone", cfg.Zone.Name,
+				"error", err,
+			)
+		}
+	}
+
+	// 3. update agent state
+	err = zm.SetAgentState(status.newState)
+	if err != nil {
+		logging.Errorw("Failed to update agent state",
+			"agent", cfg.Name,
+			"zone", cfg.Zone.Name,
+			"state", status.newState,
+			"error", err,
+		)
+	}
+
+	// 4. notify lease manager to update agent state cache
+	lm.SetState(status.newState)
+
+	logging.Debugw("Zoom status",
+		"zoomEnable", status.zoomEnable,
+		"zcConnected", status.zcConnected,
+		"peerConnected", status.peerConnected,
+		"state", status.state+"->"+status.newState,
+		"mode", fmt.Sprintf("%s(%s)->%s", status.mode, localAgentMode, status.newMode),
+		"activeZone", status.activeZone,
+	)
 }
