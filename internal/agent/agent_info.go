@@ -19,6 +19,8 @@ const (
 	UnknownMode = "unknown" // when all backend nodes failed
 )
 
+var ValidModes = []string{NormalMode, OrphanMode, UnknownMode}
+
 const (
 	StateKey = "state"
 	ModeKey  = "mode"

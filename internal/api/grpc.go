@@ -126,25 +126,38 @@ func newControlGRPCService(cfg *config.Config, leaseMgr *lease.LeaseManager, zon
 	return &ControlGRPCService{cfg: cfg, leaseMgr: leaseMgr, zoneMgr: zoneMgr}
 }
 
-func (s *ControlGRPCService) GetState(ctx context.Context, req *pb.Empty) (*pb.AgentState, error) {
+func (s *ControlGRPCService) GetStatus(ctx context.Context, req *pb.Empty) (*pb.AgentStatus, error) {
 	state, err := s.zoneMgr.GetAgentState()
 	if err != nil {
-		return &pb.AgentState{}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.AgentStatus{}, status.Errorf(codes.Unavailable, err.Error())
+	}
+
+	mode, err := s.zoneMgr.GetAgentMode()
+	if err != nil {
+		return &pb.AgentStatus{State: state}, status.Errorf(codes.Unavailable, err.Error())
 	}
 
 	enable, err := s.zoneMgr.GetZoomEnable()
 	if err != nil {
-		return &pb.AgentState{State: state}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.AgentStatus{State: state, Mode: mode}, status.Errorf(codes.Unavailable, err.Error())
 	}
 
-	return &pb.AgentState{State: state, ZoomEnable: enable}, nil
+	return &pb.AgentStatus{State: state, Mode: mode, ZoomEnable: enable}, nil
 }
 
-func (s *ControlGRPCService) SetState(ctx context.Context, state *pb.AgentState) (*pb.BoolValue, error) {
+func (s *ControlGRPCService) SetStatus(ctx context.Context, state *pb.AgentStatus) (*pb.BoolValue, error) {
 	if !slices.Contains(agent.ValidStates, state.State) {
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid state:%s", state.State))
 	}
 	err := s.zoneMgr.SetAgentState(state.State)
+	if err != nil {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
+	}
+
+	if !slices.Contains(agent.ValidModes, state.Mode) {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid mode:%s", state.Mode))
+	}
+	err = s.zoneMgr.SetAgentMode(state.Mode)
 	if err != nil {
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
 	}

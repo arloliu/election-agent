@@ -42,6 +42,34 @@ func (_m *MockZoneManager) GetActiveZone() (string, error) {
 	return r0, r1
 }
 
+// GetAgentMode provides a mock function with given fields:
+func (_m *MockZoneManager) GetAgentMode() (string, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAgentMode")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (string, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetAgentState provides a mock function with given fields:
 func (_m *MockZoneManager) GetAgentState() (string, error) {
 	ret := _m.Called()
@@ -88,24 +116,24 @@ func (_m *MockZoneManager) GetMode() string {
 	return r0
 }
 
-// GetPeerStates provides a mock function with given fields:
-func (_m *MockZoneManager) GetPeerStates() ([]*election_agent_v1.AgentState, error) {
+// GetPeerStatus provides a mock function with given fields:
+func (_m *MockZoneManager) GetPeerStatus() ([]*election_agent_v1.AgentStatus, error) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetPeerStates")
+		panic("no return value specified for GetPeerStatus")
 	}
 
-	var r0 []*election_agent_v1.AgentState
+	var r0 []*election_agent_v1.AgentStatus
 	var r1 error
-	if rf, ok := ret.Get(0).(func() ([]*election_agent_v1.AgentState, error)); ok {
+	if rf, ok := ret.Get(0).(func() ([]*election_agent_v1.AgentStatus, error)); ok {
 		return rf()
 	}
-	if rf, ok := ret.Get(0).(func() []*election_agent_v1.AgentState); ok {
+	if rf, ok := ret.Get(0).(func() []*election_agent_v1.AgentStatus); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*election_agent_v1.AgentState)
+			r0 = ret.Get(0).([]*election_agent_v1.AgentStatus)
 		}
 	}
 
@@ -146,6 +174,24 @@ func (_m *MockZoneManager) GetZoomEnable() (bool, error) {
 	return r0, r1
 }
 
+// SetAgentMode provides a mock function with given fields: mode
+func (_m *MockZoneManager) SetAgentMode(mode string) error {
+	ret := _m.Called(mode)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetAgentMode")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(mode)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // SetAgentState provides a mock function with given fields: state
 func (_m *MockZoneManager) SetAgentState(state string) error {
 	ret := _m.Called(state)
@@ -169,17 +215,17 @@ func (_m *MockZoneManager) SetMode(mode string) {
 	_m.Called(mode)
 }
 
-// SetPeerStates provides a mock function with given fields: state
-func (_m *MockZoneManager) SetPeerStates(state string) error {
-	ret := _m.Called(state)
+// SetPeerStatus provides a mock function with given fields: status
+func (_m *MockZoneManager) SetPeerStatus(status *election_agent_v1.AgentStatus) error {
+	ret := _m.Called(status)
 
 	if len(ret) == 0 {
-		panic("no return value specified for SetPeerStates")
+		panic("no return value specified for SetPeerStatus")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string) error); ok {
-		r0 = rf(state)
+	if rf, ok := ret.Get(0).(func(*election_agent_v1.AgentStatus) error); ok {
+		r0 = rf(status)
 	} else {
 		r0 = ret.Error(0)
 	}

@@ -20,7 +20,7 @@ type KVDriver interface {
 	GetHolder(ctx context.Context, name string) (string, error)
 	Shutdown(ctx context.Context) error
 
-	// GetAgentState gets agent state.
+	// GetAgentMode gets agent mode.
 	GetAgentMode() (string, error)
 	// SetAgentMode sets agent mode.
 	SetAgentMode(mode string) error

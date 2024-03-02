@@ -30,10 +30,12 @@ type ZoneManager interface {
 	GetMode() string
 	SetMode(mode string)
 	GetActiveZone() (string, error)
-	GetPeerStates() ([]*eagrpc.AgentState, error)
-	SetPeerStates(state string) error
+	GetPeerStatus() ([]*eagrpc.AgentStatus, error)
+	SetPeerStatus(status *eagrpc.AgentStatus) error
 	GetAgentState() (string, error)
 	SetAgentState(state string) error
+	GetAgentMode() (string, error)
+	SetAgentMode(mode string) error
 	GetZoomEnable() (bool, error)
 	SetZoomEnable(enable bool) error
 }
@@ -62,7 +64,7 @@ type zoneStatus struct {
 	newMode       string
 	state         string
 	newState      string
-	peerStates    []*eagrpc.AgentState
+	peerStatus    []*eagrpc.AgentStatus
 }
 
 func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriver, leaseMgr *lease.LeaseManager) (*zoneManager, error) {
@@ -199,9 +201,9 @@ func (zm *zoneManager) GetActiveZone() (string, error) {
 	return string(body), nil
 }
 
-func (zm *zoneManager) GetPeerStates() ([]*eagrpc.AgentState, error) {
+func (zm *zoneManager) GetPeerStatus() ([]*eagrpc.AgentStatus, error) {
 	var mu sync.Mutex
-	states := make([]*eagrpc.AgentState, 0, len(zm.peerClients))
+	statuses := make([]*eagrpc.AgentStatus, 0, len(zm.peerClients))
 	eg := errgroup.Group{}
 
 	for _, client := range zm.peerClients {
@@ -210,14 +212,14 @@ func (zm *zoneManager) GetPeerStates() ([]*eagrpc.AgentState, error) {
 			ctx, cancel := context.WithTimeout(zm.ctx, zm.cfg.Zone.PeerTimeout)
 			defer cancel()
 
-			state, err := client.GetState(ctx, &eagrpc.Empty{})
+			status, err := client.GetStatus(ctx, &eagrpc.Empty{})
 			if err != nil {
 				return err
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
-			states = append(states, state)
+			statuses = append(statuses, status)
 
 			return nil
 		})
@@ -227,10 +229,10 @@ func (zm *zoneManager) GetPeerStates() ([]*eagrpc.AgentState, error) {
 		return nil, err
 	}
 
-	return states, nil
+	return statuses, nil
 }
 
-func (zm *zoneManager) SetPeerStates(state string) error {
+func (zm *zoneManager) SetPeerStatus(status *eagrpc.AgentStatus) error {
 	var n atomic.Int32
 	eg := errgroup.Group{}
 	for _, client := range zm.peerClients {
@@ -239,12 +241,14 @@ func (zm *zoneManager) SetPeerStates(state string) error {
 			ctx, cancel := context.WithTimeout(zm.ctx, zm.cfg.Zone.PeerTimeout)
 			defer cancel()
 
-			result, err := client.SetState(ctx, &eagrpc.AgentState{State: state, ZoomEnable: true})
+			result, err := client.SetStatus(ctx, status)
 			if err != nil {
 				logging.Warnw("Failed to set peer state",
 					"agent", zm.cfg.Name,
 					"zone", zm.cfg.Zone.Name,
-					"state", state,
+					"mode", status.Mode,
+					"state", status.State,
+					"zoom_enable", status.ZoomEnable,
 				)
 				return err
 			}
@@ -274,6 +278,14 @@ func (zm *zoneManager) GetAgentState() (string, error) {
 func (zm *zoneManager) SetAgentState(state string) error {
 	_, err := zm.driver.Set(zm.ctx, zm.cfg.AgentInfoKey(agent.StateKey), state, false)
 	return err
+}
+
+func (zm *zoneManager) GetAgentMode() (string, error) {
+	return zm.driver.GetAgentMode()
+}
+
+func (zm *zoneManager) SetAgentMode(mode string) error {
+	return zm.driver.SetAgentMode(mode)
 }
 
 func (zm *zoneManager) GetZoomEnable() (bool, error) {
@@ -331,8 +343,8 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 		status.mode = agent.UnknownMode
 	}
 
-	status.peerStates, _ = zm.GetPeerStates()
-	if len(status.peerStates) == 0 {
+	status.peerStatus, _ = zm.GetPeerStatus()
+	if len(status.peerStatus) == 0 {
 		status.peerConnected = false
 	}
 
@@ -361,7 +373,7 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm Z
 		status.newMode = agent.NormalMode
 
 		peerActive := false
-		for _, peerState := range status.peerStates {
+		for _, peerState := range status.peerStatus {
 			if peerState.State == agent.ActiveState {
 				peerActive = true
 				break
@@ -409,7 +421,7 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm Z
 
 	// 2. notify agent peers to enter standby mode if this agent becomes active one
 	if status.newState == agent.ActiveState && status.peerConnected {
-		err := zm.SetPeerStates(agent.StandbyState)
+		err := zm.SetPeerStatus(&eagrpc.AgentStatus{State: agent.StandbyState, Mode: agent.NormalMode, ZoomEnable: true})
 		if err != nil {
 			logging.Errorw("Failed to notify agent peers to enter standby mode",
 				"agent", cfg.Name,

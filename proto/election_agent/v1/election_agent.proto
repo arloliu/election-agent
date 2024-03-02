@@ -92,12 +92,13 @@ service Election {
   rpc GetPods(GetPodsRequest) returns (Pods);
 }
 
-message AgentState {
+message AgentStatus {
   string state = 1;
-  bool zoom_enable = 2;
+  string mode = 2;
+  bool zoom_enable = 3;
 }
 
 service Control {
-  rpc GetState(Empty) returns (AgentState);
-  rpc SetState(AgentState) returns (BoolValue);
+  rpc GetStatus(Empty) returns (AgentStatus);
+  rpc SetStatus(AgentStatus) returns (BoolValue);
 }

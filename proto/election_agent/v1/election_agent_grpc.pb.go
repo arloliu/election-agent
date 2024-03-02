@@ -257,16 +257,16 @@ var Election_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Control_GetState_FullMethodName = "/grpc.election_agent.v1.Control/GetState"
-	Control_SetState_FullMethodName = "/grpc.election_agent.v1.Control/SetState"
+	Control_GetStatus_FullMethodName = "/grpc.election_agent.v1.Control/GetStatus"
+	Control_SetStatus_FullMethodName = "/grpc.election_agent.v1.Control/SetStatus"
 )
 
 // ControlClient is the client API for Control service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ControlClient interface {
-	GetState(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AgentState, error)
-	SetState(ctx context.Context, in *AgentState, opts ...grpc.CallOption) (*BoolValue, error)
+	GetStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AgentStatus, error)
+	SetStatus(ctx context.Context, in *AgentStatus, opts ...grpc.CallOption) (*BoolValue, error)
 }
 
 type controlClient struct {
@@ -277,18 +277,18 @@ func NewControlClient(cc grpc.ClientConnInterface) ControlClient {
 	return &controlClient{cc}
 }
 
-func (c *controlClient) GetState(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AgentState, error) {
-	out := new(AgentState)
-	err := c.cc.Invoke(ctx, Control_GetState_FullMethodName, in, out, opts...)
+func (c *controlClient) GetStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AgentStatus, error) {
+	out := new(AgentStatus)
+	err := c.cc.Invoke(ctx, Control_GetStatus_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlClient) SetState(ctx context.Context, in *AgentState, opts ...grpc.CallOption) (*BoolValue, error) {
+func (c *controlClient) SetStatus(ctx context.Context, in *AgentStatus, opts ...grpc.CallOption) (*BoolValue, error) {
 	out := new(BoolValue)
-	err := c.cc.Invoke(ctx, Control_SetState_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Control_SetStatus_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -299,8 +299,8 @@ func (c *controlClient) SetState(ctx context.Context, in *AgentState, opts ...gr
 // All implementations must embed UnimplementedControlServer
 // for forward compatibility
 type ControlServer interface {
-	GetState(context.Context, *Empty) (*AgentState, error)
-	SetState(context.Context, *AgentState) (*BoolValue, error)
+	GetStatus(context.Context, *Empty) (*AgentStatus, error)
+	SetStatus(context.Context, *AgentStatus) (*BoolValue, error)
 	mustEmbedUnimplementedControlServer()
 }
 
@@ -308,11 +308,11 @@ type ControlServer interface {
 type UnimplementedControlServer struct {
 }
 
-func (UnimplementedControlServer) GetState(context.Context, *Empty) (*AgentState, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetState not implemented")
+func (UnimplementedControlServer) GetStatus(context.Context, *Empty) (*AgentStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
 }
-func (UnimplementedControlServer) SetState(context.Context, *AgentState) (*BoolValue, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetState not implemented")
+func (UnimplementedControlServer) SetStatus(context.Context, *AgentStatus) (*BoolValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetStatus not implemented")
 }
 func (UnimplementedControlServer) mustEmbedUnimplementedControlServer() {}
 
@@ -327,38 +327,38 @@ func RegisterControlServer(s grpc.ServiceRegistrar, srv ControlServer) {
 	s.RegisterService(&Control_ServiceDesc, srv)
 }
 
-func _Control_GetState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Control_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlServer).GetState(ctx, in)
+		return srv.(ControlServer).GetStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Control_GetState_FullMethodName,
+		FullMethod: Control_GetStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlServer).GetState(ctx, req.(*Empty))
+		return srv.(ControlServer).GetStatus(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Control_SetState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AgentState)
+func _Control_SetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AgentStatus)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlServer).SetState(ctx, in)
+		return srv.(ControlServer).SetStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Control_SetState_FullMethodName,
+		FullMethod: Control_SetStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlServer).SetState(ctx, req.(*AgentState))
+		return srv.(ControlServer).SetStatus(ctx, req.(*AgentStatus))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -371,12 +371,12 @@ var Control_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ControlServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetState",
-			Handler:    _Control_GetState_Handler,
+			MethodName: "GetStatus",
+			Handler:    _Control_GetStatus_Handler,
 		},
 		{
-			MethodName: "SetState",
-			Handler:    _Control_SetState_Handler,
+			MethodName: "SetStatus",
+			Handler:    _Control_SetStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
