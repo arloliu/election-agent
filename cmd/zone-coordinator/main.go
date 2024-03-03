@@ -46,6 +46,7 @@ func main() {
 	if zone == "" {
 		logging.Fatalw("The `ZC_ZONE` environment variable can't be empty", "error", err)
 	}
+	logging.Infow("Environment variable", "ZC_ZONE", zone, "ZC_PORT", port)
 
 	server := zc.NewServer(port, zone)
 
