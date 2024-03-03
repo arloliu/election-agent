@@ -112,7 +112,12 @@ func (s *ElectionGRPCService) GetPods(ctx context.Context, req *pb.GetPodsReques
 	if !s.cfg.Kube.Enable || s.kubeClient == nil {
 		return nil, status.Errorf(codes.Unimplemented, "method GetPods not implemented")
 	}
-	return s.kubeClient.GetPods(req.Namespace, req.Deployment)
+	pods, err := s.kubeClient.GetPods(req.Namespace, req.Deployment)
+	if err != nil {
+		return pods, status.Errorf(codes.NotFound, err.Error())
+	}
+
+	return pods, err
 }
 
 type ControlGRPCService struct {
