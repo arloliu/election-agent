@@ -14,9 +14,15 @@ type Lease interface {
 	Extend(ctx context.Context) error
 }
 
+type Mutex interface {
+	Lock(ctx context.Context) error
+	Unlock(tx context.Context) (bool, error)
+}
+
 type KVDriver interface {
 	LeaseID(name string, holder string, ttl time.Duration) uint64
 	NewLease(name string, holder string, ttl time.Duration) Lease
+	NewMutex(name string, ttl time.Duration) Mutex
 	GetHolder(ctx context.Context, name string) (string, error)
 	Shutdown(ctx context.Context) error
 
@@ -24,10 +30,14 @@ type KVDriver interface {
 	GetAgentMode() (string, error)
 	// SetAgentMode sets agent mode.
 	SetAgentMode(mode string) error
+	// GetAgentState gets agent state.
+	GetAgentState() (string, error)
+	// SetAgentState sets agent state.
+	SetAgentState(state string) error
 	// Get the string value of key.
 	Get(ctx context.Context, key string, strict bool) (string, error)
-	// GetBool gets the boolean value of key.
-	GetBool(ctx context.Context, key string, strict bool) (bool, error)
+	// GetSetBool gets the boolean value of key, sets and returns defVal is the key doesn't exist.
+	GetSetBool(ctx context.Context, key string, defVal bool, strict bool) (bool, error)
 	// Set the string value of key.
 	Set(ctx context.Context, key string, value string, strict bool) (int, error)
 	// SetBool sets the boolean value of key.

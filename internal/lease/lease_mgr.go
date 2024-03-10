@@ -2,10 +2,12 @@ package lease
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"election-agent/internal/agent"
 	"election-agent/internal/config"
+	"election-agent/internal/logging"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -16,6 +18,7 @@ type LeaseManager struct {
 	state  *agent.State
 	driver KVDriver
 	cache  *lru.TwoQueueCache[uint64, Lease]
+	mu     sync.Mutex
 }
 
 func NewLeaseManager(ctx context.Context, cfg *config.Config, driver KVDriver) *LeaseManager {
@@ -99,22 +102,22 @@ func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string) (string
 }
 
 func (lm *LeaseManager) GetState() string {
-	state := lm.state.Load()
-	if state == "" {
-		var err error
-		state, err = lm.driver.Get(lm.ctx, lm.cfg.AgentInfoKey(agent.StateKey), false)
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	if lm.state.Expired() {
+		state, err := lm.driver.GetAgentState()
 		if err != nil {
 			lm.state.Store(agent.UnavailableState)
 			return agent.UnavailableState
 		}
+		logging.Debugw("GetState expired", "state", state)
 		lm.state.Store(state)
-		return lm.state.Load()
 	}
-
-	return state
+	return lm.state.Load()
 }
 
-func (lm *LeaseManager) SetState(state string) {
+func (lm *LeaseManager) SetStateCache(state string) {
 	lm.state.Store(state)
 }
 

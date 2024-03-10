@@ -9,6 +9,7 @@ const (
 	ActiveState      = "active"
 	StandbyState     = "standby"
 	UnavailableState = "unavailable" // when all backend nodes failed
+	EmptyState       = "empty"       // when the value in all backend nodes are empty
 )
 
 var ValidStates = []string{ActiveState, StandbyState, UnavailableState}

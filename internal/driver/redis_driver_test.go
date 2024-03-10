@@ -176,7 +176,7 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	}
 
 	driver, err := NewRedisKVDriver(ctx, &cfg)
-	require.Error(err)
+	require.NoError(err)
 	require.NotNil(driver)
 
 	for _, client := range driver.clients {

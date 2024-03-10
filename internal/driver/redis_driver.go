@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -82,11 +83,39 @@ func (rl *RedisLease) Extend(ctx context.Context) error {
 	return nil
 }
 
+// RedisMutex implements Mutex interface
+type RedisMutex struct {
+	mu     *redsync.Mutex
+	driver *RedisKVDriver
+}
+
+var _ lease.Mutex = (*RedisMutex)(nil)
+
+func (rm *RedisMutex) Lock(ctx context.Context) error {
+	err := rm.mu.LockContext(ctx)
+	if err == nil {
+		return nil
+	}
+
+	if rm.driver.isAllRedisDown(err) {
+		return &lease.UnavailableError{Err: err}
+	}
+
+	return err
+}
+
+func (rm *RedisMutex) Unlock(ctx context.Context) (bool, error) {
+	ok, err := rm.mu.UnlockContext(ctx)
+	if err != nil && rm.driver.isAllRedisDown(err) {
+		return ok, &lease.UnavailableError{Err: err}
+	}
+	return ok, err
+}
+
 // RedisKVDriver implements KVDriver interface
 type RedisKVDriver struct {
 	ctx         context.Context
 	cfg         *config.Config
-	mode        string
 	clients     []goredislib.UniversalClient
 	originPools []redsyncredis.Pool
 	pools       []redsyncredis.Pool
@@ -114,6 +143,9 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 
 	clients := make([]goredislib.UniversalClient, 0, len(redisOpts))
 	for _, opts := range redisOpts {
+		opts.DialTimeout = 2 * time.Second
+		opts.ReadTimeout = 1 * time.Second
+		opts.WriteTimeout = 1 * time.Second
 		clients = append(clients, goredislib.NewUniversalClient(opts))
 	}
 	pools := make([]redsyncredis.Pool, 0, len(clients))
@@ -132,7 +164,16 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 		hasher:      maphash.NewHasher[string](),
 	}
 
-	err = inst.SetAgentMode(agent.NormalMode)
+	state, stateErr := inst.GetAgentState()
+	if stateErr != nil {
+		return inst, stateErr
+	}
+	if state != agent.UnavailableState {
+		err = inst.SetAgentMode(agent.NormalMode)
+	} else {
+		inst.rs = redsync.New(inst.pools...)
+		logging.Warn("Initial key-value driver in unavailable state")
+	}
 
 	return inst, err
 }
@@ -160,13 +201,31 @@ func (rd *RedisKVDriver) NewLease(name string, holder string, ttl time.Duration)
 			redsync.WithTimeoutFactor(0.2),
 			redsync.WithValue(holder),
 			redsync.WithShufflePools(false),
-			redsync.WithFailFast(false),
+			redsync.WithFailFast(true),
 			redsync.WithGenValueFunc(func() (string, error) { return holder, nil }),
 		),
 		driver: rd,
 	}
 
 	return lease
+}
+
+func (rd *RedisKVDriver) NewMutex(name string, ttl time.Duration) lease.Mutex {
+	rd.mu.Lock()
+	defer rd.mu.Unlock()
+
+	return &RedisMutex{
+		driver: rd,
+		mu: rd.rs.NewMutex(
+			rd.lockKey(name),
+			redsync.WithExpiry(ttl),
+			redsync.WithTries(3),
+			redsync.WithSetNXOnExtend(),
+			redsync.WithTimeoutFactor(0.1),
+			redsync.WithShufflePools(false),
+			redsync.WithFailFast(true),
+		),
+	}
 }
 
 func (rd *RedisKVDriver) Shutdown(ctx context.Context) error {
@@ -176,17 +235,50 @@ func (rd *RedisKVDriver) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (rd *RedisKVDriver) GetAgentState() (string, error) {
+	state, err := rd.Get(rd.ctx, rd.cfg.AgentInfoKey(agent.StateKey), false)
+	if err != nil {
+		return agent.UnavailableState, nil
+	}
+
+	if state == agent.UnavailableState {
+		// clear state info when the previous "unavailable" value receieved
+		_, _ = rd.Set(rd.ctx, rd.cfg.AgentInfoKey(agent.StateKey), "", false)
+		return agent.EmptyState, nil
+	}
+
+	if state == "" {
+		return agent.EmptyState, nil
+	}
+
+	if !slices.Contains(agent.ValidStates, state) {
+		return state, fmt.Errorf("The retrieved agent state '%s' is invalid", state)
+	}
+
+	return state, nil
+}
+
+func (rd *RedisKVDriver) SetAgentState(state string) error {
+	_, err := rd.Set(rd.ctx, rd.cfg.AgentInfoKey(agent.StateKey), state, false)
+	if err != nil && state == agent.UnavailableState {
+		return nil
+	}
+
+	return err
+}
+
 func (rd *RedisKVDriver) GetAgentMode() (string, error) {
-	return rd.Get(rd.ctx, rd.cfg.AgentInfoKey(agent.ModeKey), false)
+	mode, err := rd.Get(rd.ctx, rd.cfg.AgentInfoKey(agent.ModeKey), false)
+	if err != nil || mode == "" {
+		return agent.UnknownMode, err
+	}
+
+	return mode, err
 }
 
 func (rd *RedisKVDriver) SetAgentMode(mode string) error {
 	rd.mu.Lock()
 	defer rd.mu.Unlock()
-
-	if rd.mode == mode {
-		return nil
-	}
 
 	var pools []redsyncredis.Pool
 	if mode == agent.OrphanMode {
@@ -201,11 +293,14 @@ func (rd *RedisKVDriver) SetAgentMode(mode string) error {
 	} else {
 		pools = rd.originPools
 	}
-	rd.mode = mode
-	rd.pools = pools
-	rd.quorum = len(pools)/2 + 1
-	rd.rs = redsync.New(pools...)
-	logging.Debugw("driver: SetAgentMode", "mode", rd.mode, "pools", len(rd.pools), "quorum", rd.quorum)
+
+	if len(pools) != len(rd.pools) {
+		rd.pools = pools
+		rd.quorum = len(pools)/2 + 1
+		rd.rs = redsync.New(pools...)
+	}
+
+	logging.Debugw("driver: SetAgentMode", "mode", mode, "pools", len(rd.pools), "quorum", rd.quorum)
 
 	_, err := rd.Set(rd.ctx, rd.cfg.AgentInfoKey(agent.ModeKey), mode, false)
 	return err
@@ -215,8 +310,14 @@ func (rd *RedisKVDriver) Get(ctx context.Context, key string, strict bool) (stri
 	return rd.redisGetAsync(ctx, key, strict)
 }
 
-func (rd *RedisKVDriver) GetBool(ctx context.Context, key string, strict bool) (bool, error) {
+func (rd *RedisKVDriver) GetSetBool(ctx context.Context, key string, defVal bool, strict bool) (bool, error) {
 	val, err := rd.redisGetAsync(ctx, key, strict)
+	if val == "" {
+		_, err := rd.SetBool(ctx, key, defVal, strict)
+		if err != nil {
+			return defVal, err
+		}
+	}
 	return isBoolStrTrue(val), err
 }
 
@@ -230,6 +331,10 @@ func (rd *RedisKVDriver) SetBool(ctx context.Context, key string, value bool, st
 
 func (rd *RedisKVDriver) leaseKey(val string) string {
 	return rd.cfg.KeyPrefix + "/lease/" + val
+}
+
+func (rd *RedisKVDriver) lockKey(val string) string {
+	return rd.cfg.KeyPrefix + "/lock/" + val
 }
 
 func (rd *RedisKVDriver) redisGetAsync(ctx context.Context, key string, strict bool) (string, error) {
@@ -263,10 +368,12 @@ func (rd *RedisKVDriver) redisGetAsync(ctx context.Context, key string, strict b
 	}
 
 	val, n := getMostFreqVal[string](replies)
-	if strict && n < rd.quorum {
-		return val, fmt.Errorf("Get fails, the number of the same %s:%s is not >= %d quorum, error: %w", key, val, rd.quorum, err)
-	} else if n == 0 {
-		return val, errors.New("Get fails, all redis nodes are down")
+	if strict {
+		if n < rd.quorum {
+			return val, fmt.Errorf("Get fails, the number of the same %s:%s is not >= %d quorum, error: %w", key, val, rd.quorum, err)
+		}
+	} else if n == 0 && rd.isAllRedisDown(err) {
+		return val, fmt.Errorf("Get %s fails, all redis nodes are down", key)
 	}
 
 	return val, nil
@@ -327,7 +434,7 @@ func (rd *RedisKVDriver) redisSetAsync(ctx context.Context, key string, value st
 			return n, fmt.Errorf("Set fails, the number of the same %s:%s is not >= %d quorum, error: %w", key, value, rd.quorum, err)
 		}
 	} else if n == 0 {
-		return n, errors.New("Set fails, all redis nodes are down")
+		return n, fmt.Errorf("Set %s:%s fails, all redis nodes are down", key, value)
 	}
 
 	return n, nil

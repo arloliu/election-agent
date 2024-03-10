@@ -35,8 +35,8 @@ type Config struct {
 	// Possible values: `active`, `standby`, `unavailable`
 	DefaultState string `default:"active" yaml:"default_state"`
 	// The state cache TTL, set it to zero for disabling state cache.
-	// Defaults to `1s`.
-	StateCacheTTL time.Duration `default:"1s" split_words:"true" yaml:"state_cache_ttl"`
+	// Defaults to `0s`.
+	StateCacheTTL time.Duration `default:"0s" split_words:"true" yaml:"state_cache_ttl"`
 
 	Kube KubeConfing `yaml:"kube"` // K8S related settings.
 	GRPC GRPCConfig  `yaml:"grpc"` // gRPC service related settings.
@@ -124,7 +124,11 @@ type ZoneConfig struct {
 
 	// The zone health check interval.
 	// Defaults to `10s`.
-	CheckInterval time.Duration `default:"10s" split_words:"true" yaml:"coordinator_timeout"`
+	CheckInterval time.Duration `default:"10s" split_words:"true" yaml:"check_interval"`
+
+	// The execution timeout of zone health check.
+	// Defaults to `3s`.
+	CheckTimeout time.Duration `default:"3s" split_words:"true" yaml:"check_timeout"`
 
 	// The zone coordinator's url.
 	CoordinatorURL string `split_words:"true" yaml:"coordinator_url"`

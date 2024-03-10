@@ -33,8 +33,14 @@ func isNetOpError(err error) bool {
 		return false
 	}
 
-	redisErr := &redsync.RedisError{}
 	opErr := &net.OpError{}
+	// check if error is a network operation error
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	redisErr := &redsync.RedisError{}
+	// check if error is a wrapped network operation error
 	if errors.As(err, &redisErr) {
 		rerr, ok := err.(*redsync.RedisError) //nolint:errorlint
 		if !ok {

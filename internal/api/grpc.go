@@ -45,7 +45,7 @@ func (s *ElectionGRPCService) Campaign(ctx context.Context, req *pb.CampaignRequ
 		if lease.IsUnavailableError(err) {
 			return &pb.CampaignResult{}, status.Error(codes.Unavailable, err.Error())
 		}
-		return &pb.CampaignResult{}, nil
+		return &pb.CampaignResult{Elected: false, Leader: err.Error()}, nil
 	}
 
 	return &pb.CampaignResult{Elected: true, Leader: req.Candidate}, nil
@@ -134,17 +134,17 @@ func newControlGRPCService(cfg *config.Config, leaseMgr *lease.LeaseManager, zon
 func (s *ControlGRPCService) GetStatus(ctx context.Context, req *pb.Empty) (*pb.AgentStatus, error) {
 	state, err := s.zoneMgr.GetAgentState()
 	if err != nil {
-		return &pb.AgentStatus{}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.AgentStatus{State: agent.UnavailableState, Mode: agent.UnknownMode}, nil
 	}
 
 	mode, err := s.zoneMgr.GetAgentMode()
 	if err != nil {
-		return &pb.AgentStatus{State: state}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.AgentStatus{State: state, Mode: agent.UnknownMode}, nil
 	}
 
 	enable, err := s.zoneMgr.GetZoomEnable()
 	if err != nil {
-		return &pb.AgentStatus{State: state, Mode: mode}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.AgentStatus{State: state, Mode: mode}, nil
 	}
 
 	return &pb.AgentStatus{State: state, Mode: mode, ZoomEnable: enable}, nil

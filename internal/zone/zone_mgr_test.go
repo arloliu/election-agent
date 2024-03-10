@@ -189,20 +189,17 @@ func newMockZoneManager(ctx context.Context, cfg *config.Config) (*mockComponent
 	// return zoneMgr, nil
 	mockMgr := &MockZoneManager{}
 
-	mockMgr.On("GetMode").Return(func() string {
-		return m.zm.GetMode()
-	})
-	mockMgr.On("SetMode", mock.AnythingOfType("string")).
-		Run(func(args mock.Arguments) {
-			mode, _ := args.Get(0).(string)
-			m.zm.SetMode(mode)
-		})
-
 	mockMgr.On("SetPeerStatus", mock.AnythingOfType("*election_agent_v1.AgentStatus")).Return(nil)
 	mockMgr.On("SetAgentState", mock.AnythingOfType("string")).
 		Return(func(state string) error {
 			return m.zm.SetAgentState(state)
 		})
+
+	mockMgr.On("SetAgentMode", mock.AnythingOfType("string")).
+		Return(func(mode string) error {
+			return m.zm.SetAgentMode(mode)
+		})
+
 	mockMgr.On("GetZoomEnable").
 		Return(func() (bool, error) {
 			return m.zm.GetZoomEnable()
