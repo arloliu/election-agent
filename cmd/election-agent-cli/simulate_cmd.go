@@ -68,12 +68,27 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		peers: make([][]*electionCandidate, numClients),
 	}
 
+	svcConfig := `{
+		"methodConfig": [{
+			"name": [{"service": "grpc.election_agent.v1.Control"}],
+			"waitForReady": true,
+			"timeout": "5s",
+			"retryPolicy": {
+				"maxAttempts": 5,
+				"initialBackoff": "0.1s",
+				"maxBackoff": "1s",
+				"backoffMultiplier": 2.0,
+				"retryableStatusCodes": [ "UNAVAILABLE" ]
+			}
+		}]}`
+
 	for i := 0; i < numClients; i++ {
 		inst.peers[i] = make([]*electionCandidate, numCandidates)
 		activeIdx := rand.IntN(numCandidates)
 		for j := 0; j < numCandidates; j++ {
 			conn, err := grpc.DialContext(ctx, host,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithDefaultServiceConfig(svcConfig),
 			)
 			if err != nil {
 				return nil, err
@@ -172,7 +187,7 @@ func (s *simulateClient) chooseLeader() error {
 					if err != nil {
 						return fmt.Errorf("Active candidate should campaign fail but not got error (peer: %d, idx: %d), error: %w", i, j, err)
 					} else if ret.Elected {
-						return fmt.Errorf("Active candidate should campaign fail (peer: %d, idx: %d)", i, j)
+						return fmt.Errorf("Active candidate should campaign fail err: %s (peer: %d, idx: %d)", ret.Leader, i, j)
 					}
 				case agent.UnavailableState:
 					if err == nil {
@@ -255,7 +270,7 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 }
 
 func simulateClients(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), simDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), simDuration)
 	defer cancel()
 
 	if leaderResign {

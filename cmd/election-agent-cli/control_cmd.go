@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -15,6 +17,7 @@ func init() {
 	rootCmd.AddCommand(controlCmd)
 
 	controlCmd.AddCommand(getStatusCmd)
+	controlCmd.AddCommand(getActiveZoneCmd)
 	controlCmd.AddCommand(setStatusCmd)
 }
 
@@ -49,6 +52,25 @@ func getStatus(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 	fmt.Println(output)
+	return nil
+}
+
+var getActiveZoneCmd = &cobra.Command{
+	Use:   "get-active-zone [url]",
+	Short: "Get zone coordinator active zone",
+	Args:  cobra.ExactArgs(1),
+	RunE:  getActiveZone,
+}
+
+func getActiveZone(cmd *cobra.Command, args []string) error {
+	url := args[0]
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return err
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	fmt.Printf("%s\n", body)
 	return nil
 }
 
