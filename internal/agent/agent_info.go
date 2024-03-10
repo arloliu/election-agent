@@ -29,30 +29,32 @@ const (
 type State struct {
 	val  atomic.Value
 	ttl  time.Duration
-	last time.Time
+	last atomic.Pointer[time.Time]
 }
 
 func NewState(state string, ttl time.Duration) *State {
-	s := State{ttl: ttl, last: time.Now()}
+	s := State{ttl: ttl}
+	now := time.Now()
+	s.last.Store(&now)
 	s.Store(state)
 	return &s
 }
 
 func (s *State) Load() string {
-	if s.Expired() {
-		s.val.Store("")
-		return ""
-	}
 	return s.val.Load().(string)
 }
 
 func (s *State) Store(val string) {
-	s.last = time.Now()
+	now := time.Now()
+	s.last.Store(&now)
 	s.val.Store(val)
 }
 
 func (s *State) Expired() bool {
-	return s.last.Add(s.ttl).Before(time.Now())
+	if s.ttl == time.Duration(0) {
+		return true
+	}
+	return s.last.Load().Add(s.ttl).Before(time.Now())
 }
 
 func (s *State) IsActive() bool {
@@ -70,6 +72,8 @@ func (s *State) IsUnavailable() bool {
 func FlipState(state string) string {
 	if state == ActiveState {
 		return StandbyState
+	} else if state == StandbyState {
+		return ActiveState
 	}
-	return ActiveState
+	return state
 }

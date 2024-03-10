@@ -23,7 +23,7 @@ func TestAgentInfo_State(t *testing.T) {
 
 	time.Sleep(110 * time.Millisecond)
 	require.True(s.Expired())
-	require.Equal("", s.Load())
+	require.Equal(UnavailableState, s.Load())
 
 	s.Store(StandbyState)
 	require.False(s.Expired())
