@@ -1,2 +1,4 @@
 tmp/*
 examples/*
+build/*
+e2e-test/*

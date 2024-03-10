@@ -1,0 +1,19 @@
+FROM golang:1.22 as build
+WORKDIR /src
+ENV CGO_ENABLED=1
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN \
+make build-election-agent-cli; \
+go build -o grpc-bench-client ./benchmark/grpc; \
+go build -o http-bench-client ./benchmark/http
+
+
+
+FROM debian:12-slim
+# RUN apt update -y; apt install curl wget htop jq redis-tools -y
+COPY --from=build /src/*-bench-client /usr/bin/
+COPY --from=build /src/election-agent-cli /usr/bin/
+
+CMD ["tail", "-f", "/dev/null"]

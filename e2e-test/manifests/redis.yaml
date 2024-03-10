@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-1
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: redis-1
+      app.kubernetes.io/name: redis
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: redis-1
+        app.kubernetes.io/name: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+          limits:
+            cpu: 1000m
+            memory: 500Mi
+        ports:
+        - containerPort: 6379
+---
+# redis-2 deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-2
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: redis-2
+      app.kubernetes.io/name: redis
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: redis-2
+        app.kubernetes.io/name: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+          limits:
+            cpu: 1000m
+            memory: 500Mi
+        ports:
+        - containerPort: 6379
+---
+# redis-3 deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-3
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: redis-3
+      app.kubernetes.io/name: redis
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: redis-3
+        app.kubernetes.io/name: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+          limits:
+            cpu: 1000m
+            memory: 500Mi
+        ports:
+        - containerPort: 6379
+---
+# redis-1 service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-1
+  labels:
+    app: redis-1
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app.kubernetes.io/instance: redis-1
+    app.kubernetes.io/name: redis
+---
+# redis-2 service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-2
+  labels:
+    app: redis-2
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app.kubernetes.io/instance: redis-2
+    app.kubernetes.io/name: redis
+---
+# redis-3 service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-3
+  labels:
+    app: redis-3
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app.kubernetes.io/instance: redis-3
+    app.kubernetes.io/name: redis

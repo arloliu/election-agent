@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: election-agent
+    app.kubernetes.io/instance: election-agent-z1
+    app.kubernetes.io/version: e2e-test
+  name: election-agent-z1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: election-agent-z1
+      app.kubernetes.io/name: election-agent
+  strategy:
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+    type: RollingUpdate
+  minReadySeconds: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: election-agent-z1
+        app.kubernetes.io/name: election-agent
+        app.kubernetes.io/version: e2e-test
+    spec:
+      restartPolicy: Always
+      serviceAccountName: election-agent
+      automountServiceAccountToken: true
+      containers:
+        - name: election-agent
+          env:
+            - name: EA_ENV
+              value: development
+            - name: EA_LOG_LEVEL
+              value: debug
+            - name: EA_NAME
+              value: election-agent-z1
+            - name: EA_STATE_CACHE_TTL
+              value: 1s
+
+            - name: EA_KUBE_ENABLE
+              value: "false"
+
+            - name: EA_ZONE_ENABLE
+              value: "true"
+            - name: EA_ZONE_NAME
+              value: z1
+            - name: EA_ZONE_CHECK_INTERVAL
+              value: 1s
+            - name: EA_ZONE_PEER_URLS
+              value: election-agent-z2:443
+            - name: EA_ZONE_COORDINATOR_URL
+              value: http://zone-coordinator
+
+            - name: EA_REDIS_MODE
+              value: single
+            - name: EA_REDIS_URLS
+              value: redis://redis-1:6379,redis://redis-2:6379,redis://redis-3:6379
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+            - containerPort: 443
+              name: grpc
+              protocol: TCP
+          image: election-agent:e2e-test
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            grpc:
+              port: 443
+              service: liveness
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            grpc:
+              port: 443
+              service: readiness
+            failureThreshold: 2
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 400Mi
+            limits:
+              cpu: 2000m
+              memory: 1000Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: election-agent-z1
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      targetPort: http
+      port: 80
+    - name: grpc
+      targetPort: grpc
+      port: 443
+  selector:
+    app.kubernetes.io/instance: election-agent-z1
+    app.kubernetes.io/name: election-agent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: election-agent-headless-z1
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: election-agent-z1
+    app.kubernetes.io/name: election-agent
