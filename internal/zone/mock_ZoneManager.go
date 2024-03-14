@@ -192,6 +192,11 @@ func (_m *MockZoneManager) SetAgentState(state string) error {
 	return r0
 }
 
+// SetOpearationMode provides a mock function with given fields: mode
+func (_m *MockZoneManager) SetOpearationMode(mode string) {
+	_m.Called(mode)
+}
+
 // SetPeerStatus provides a mock function with given fields: status
 func (_m *MockZoneManager) SetPeerStatus(status *election_agent_v1.AgentStatus) error {
 	ret := _m.Called(status)

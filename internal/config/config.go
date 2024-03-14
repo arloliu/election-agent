@@ -28,14 +28,15 @@ type Config struct {
 	// The lease key will be formatted as `[cfg.KeyPrefix]/lease/<lease name>`.
 	// The agent info key will be formatted as `[cfg.KeyPrefix]/info/[cfg.Name]/<field name>`.
 	// Defaults to `ela`.
-	KeyPrefix string `default:"ela" yaml:"prefix"`
+	KeyPrefix string `default:"ela" yaml:"key_prefix"`
 
 	// The default state. Set this field in each agent for active-active or active-standby mode
 	// Defaults to `active`
 	// Possible values: `active`, `standby`, `unavailable`
 	DefaultState string `default:"active" yaml:"default_state"`
 	// The state cache TTL, set it to zero for disabling state cache.
-	// Defaults to `0s`.
+	// The state cache will be expired when zone health checker doesn't update state for `StateCacheTTL` duration.
+	// Defaults to `30s`.
 	StateCacheTTL time.Duration `default:"0s" split_words:"true" yaml:"state_cache_ttl"`
 
 	Kube KubeConfing `yaml:"kube"` // K8S related settings.
@@ -98,6 +99,9 @@ type RedisConfig struct {
 	// Defaults to `0`.
 	Primary int `default:"0" yaml:"primary_index"`
 
+	// Timeout of whole multiple redis node operations.
+	// Defaults to `3s`
+	OpearationTimeout time.Duration `default:"3s" split_words:"true" yaml:"operation_timeout"`
 	// Master is the redis master name, it only take effects when the 'mode' is "failover"(sentinel)
 	Master string `yaml:"master"`
 }

@@ -7,7 +7,6 @@ import (
 
 	"election-agent/internal/agent"
 	"election-agent/internal/config"
-	"election-agent/internal/logging"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -111,7 +110,6 @@ func (lm *LeaseManager) GetState() string {
 			lm.state.Store(agent.UnavailableState)
 			return agent.UnavailableState
 		}
-		logging.Debugw("GetState expired", "state", state)
 		lm.state.Store(state)
 	}
 	return lm.state.Load()

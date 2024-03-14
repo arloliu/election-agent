@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"election-agent/internal/config"
 	"election-agent/internal/logging"
 
+	redsyncredis "github.com/go-redsync/redsync/v4/redis"
+	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,6 +84,30 @@ func TestRedisKVDriver_parseRedisURLs_cluster(t *testing.T) {
 	}
 }
 
+func TestRedisKVDriver_isRedisUnhealthy(t *testing.T) {
+	require := require.New(t)
+
+	rd := &RedisKVDriver{
+		pools:  []redsyncredis.Pool{nil, nil, nil},
+		quorum: 2,
+	}
+	err := errors.New("error")
+	require.False(rd.isRedisUnhealthy((err)))
+
+	err = nil
+	for i := 0; i < 2; i++ {
+		err = multierror.Append(err, errors.New("error"))
+	}
+	require.False(rd.isRedisUnhealthy((err)))
+
+	err = nil
+	err = multierror.Append(err, &net.OpError{})
+	require.False(rd.isRedisUnhealthy((err)))
+
+	err = multierror.Append(err, &net.OpError{})
+	require.True(rd.isRedisUnhealthy((err)))
+}
+
 func TestRedisKVDriver_getMostFreqVal(t *testing.T) {
 	require := require.New(t)
 
@@ -99,6 +126,18 @@ func TestRedisKVDriver_getMostFreqVal(t *testing.T) {
 	val, freq := getMostFreqVal(strs)
 	require.Equal("item2", val)
 	require.Equal(600, freq)
+
+	strs = make([]string, 0, 5)
+	for i := 0; i < 3; i++ {
+		strs = append(strs, "")
+	}
+	for i := 0; i < 2; i++ {
+		strs = append(strs, "item")
+	}
+
+	val, freq = getMostFreqVal(strs)
+	require.Equal("", val)
+	require.Equal(3, freq)
 }
 
 func TestRedisKVDriver_mocks(t *testing.T) {

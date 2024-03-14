@@ -34,6 +34,8 @@ type KVDriver interface {
 	GetAgentState() (string, error)
 	// SetAgentState sets agent state.
 	SetAgentState(state string) error
+	// SetAgentState sets the operation mode by agent mode
+	SetOpearationMode(mode string)
 	// Get the string value of key.
 	Get(ctx context.Context, key string, strict bool) (string, error)
 	// GetSetBool gets the boolean value of key, sets and returns defVal is the key doesn't exist.
