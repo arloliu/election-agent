@@ -181,19 +181,20 @@ func (s *simulateClient) chooseLeader() error {
 						return fmt.Errorf("Active candidate should campaign successed (peer: %d, idx: %d), got error: %w", i, j, err)
 					}
 					if !ret.Elected {
-						return fmt.Errorf("Active candidate should campaign successed, err: %s (peer: %d, idx: %d)", ret.Leader, i, j)
+						return fmt.Errorf("Active candidate should campaign successed, (peer: %d, idx: %d), leader: %s", i, j, ret.Leader)
 					}
 				case agent.StandbyState:
 					if err != nil {
 						return fmt.Errorf("Active candidate should campaign fail but not got error (peer: %d, idx: %d), error: %w", i, j, err)
-					} else if ret.Elected {
-						return fmt.Errorf("Active candidate should campaign fail leader: %s (peer: %d, idx: %d)", ret.Leader, i, j)
+					}
+					if ret.Elected {
+						return fmt.Errorf("Active candidate should campaign fail (peer: %d, idx: %d), leader: %s", i, j, ret.Leader)
 					}
 				case agent.UnavailableState:
 					if err == nil {
-						return fmt.Errorf("Active candidate should campaign fail and got error (peer: %d, idx: %d)", i, j)
+						return fmt.Errorf("Active candidate should campaign fail and got error, elected: %t(peer: %d, idx: %d)", ret.Elected, i, j)
 					} else if status.Code(err) != codes.Unavailable {
-						return fmt.Errorf("Active candidate should campaign fail and got unavailable status code (peer: %d, idx: %d)", i, j)
+						return fmt.Errorf("Active candidate should campaign fail and got unavailable status code (peer: %d, idx: %d), error: %w", i, j, err)
 					}
 				}
 			}
@@ -270,7 +271,7 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 }
 
 func simulateClients(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), simDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), simDuration+5*time.Second)
 	defer cancel()
 
 	if leaderResign {

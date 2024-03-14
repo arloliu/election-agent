@@ -249,7 +249,7 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 			}
 		}
 		if matched {
-			log.Printf("  * Matched, agent %s state: %s, mode: %s\n", agentHost, state, mode)
+			log.Printf("  * Matched(count: %d), agent %s state: %s, mode: %s\n", len(status), agentHost, state, mode)
 			return nil
 		}
 		if time.Now().After(elapsed) {

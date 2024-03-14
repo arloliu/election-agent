@@ -216,10 +216,6 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 
 	f7 := features.New("zone-test7").
 		Assess("active zone is z1, all redis down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
-				t.Fatalf("failed to update active zone, err:%s", err.Error())
-			}
-
 			if err := scaleDeployment(ctx, cfg, "redis-1", 0); err != nil {
 				t.Fatalf("failed to scale down redis-1 deployment, err:%s", err.Error())
 			}
@@ -252,10 +248,6 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			}
 			if err := scaleDeployment(ctx, cfg, "redis-3", 1); err != nil {
 				t.Fatalf("failed to scale up redis-3 deployment, err:%s", err.Error())
-			}
-
-			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
-				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
 
 			return ctx
