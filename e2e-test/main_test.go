@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -33,13 +34,14 @@ var (
 		{file: "build/Dockerfile.zc", image: "zone-coordinator:e2e-test"},
 		{file: "build/Dockerfile.util", image: "election-agent-util:e2e-test"},
 	}
+	// parameters
 	activeZoneTimeout  = 20 * time.Second
-	stateChangeTimeout = 20 * time.Second
+	stateChangeTimeout = 60 * time.Second
 	simDuration        = 15 * time.Second
 	simNumClients      = 1000
 )
 
-func TestMain(m *testing.M) {
+func TestMain(m *testing.M) { //nolint:cyclop
 	cfg, err := envconf.NewFromFlags()
 	if err != nil {
 		log.Fatalf("failed to build envconf from flags: %s", err)
@@ -49,13 +51,50 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
+	if v := os.Getenv("CLUSTER"); v != "" {
+		clusterName = v
+	}
+	if v := os.Getenv("NAMESPACE"); v != "" {
+		namespace = v
+	}
+
+	if v := os.Getenv("ACTIVE_ZONE_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			log.Fatal("ACTIVE_ZONE_TIMEOUT invalid")
+		}
+		activeZoneTimeout = d
+	}
+
+	if v := os.Getenv("STATE_CHANGE_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			log.Fatal("STATE_CHANGE_TIMEOUT invalid")
+		}
+		stateChangeTimeout = d
+	}
+
+	if v := os.Getenv("SIM_DURATION"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			log.Fatal("SIM_DURATION invalid")
+		}
+		simDuration = d
+	}
+
+	if v := os.Getenv("SIM_NUM_CLIENTS"); v != "" {
+		d, err := strconv.ParseInt(v, 10, 32)
+		if err != nil {
+			log.Fatal("SIM_NUM_CLIENTS invalid")
+		}
+		simNumClients = int(d)
+	}
+
 	testEnv = env.NewWithConfig(cfg)
 	cluster := kind.NewCluster(clusterName)
 
-	// realCluster := false
-	// if os.Getenv("REAL_CLUSTER") != "" {
-	// 	realCluster = true
-	// }
+	log.Printf("Start E2E tests. clusterName=%s, namespace=%s, activeZoneTimeout=%s, stateChangeTimeout=%s, simDuration=%s, simNumClients=%d\n",
+		clusterName, namespace, activeZoneTimeout, stateChangeTimeout, simDuration, simNumClients)
 
 	// Use Environment.Setup to configure pre-test setup
 	testEnv.Setup(

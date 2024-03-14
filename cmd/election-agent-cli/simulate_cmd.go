@@ -86,7 +86,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		inst.peers[i] = make([]*electionCandidate, numCandidates)
 		activeIdx := rand.IntN(numCandidates)
 		for j := 0; j < numCandidates; j++ {
-			conn, err := grpc.DialContext(ctx, host,
+			conn, err := grpc.DialContext(ctx, Hostname,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithDefaultServiceConfig(svcConfig),
 			)
@@ -187,7 +187,7 @@ func (s *simulateClient) chooseLeader() error {
 					if err != nil {
 						return fmt.Errorf("Active candidate should campaign fail but not got error (peer: %d, idx: %d), error: %w", i, j, err)
 					} else if ret.Elected {
-						return fmt.Errorf("Active candidate should campaign fail err: %s (peer: %d, idx: %d)", ret.Leader, i, j)
+						return fmt.Errorf("Active candidate should campaign fail leader: %s (peer: %d, idx: %d)", ret.Leader, i, j)
 					}
 				case agent.UnavailableState:
 					if err == nil {

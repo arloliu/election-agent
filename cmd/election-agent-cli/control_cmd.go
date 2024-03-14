@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,43 +19,14 @@ import (
 func init() {
 	rootCmd.AddCommand(controlCmd)
 
-	controlCmd.AddCommand(getStatusCmd)
 	controlCmd.AddCommand(getActiveZoneCmd)
+	controlCmd.AddCommand(getStatusCmd)
 	controlCmd.AddCommand(setStatusCmd)
 }
 
 var controlCmd = &cobra.Command{
 	Use:   "control [command]",
 	Short: "Election agent control operations",
-}
-
-var getStatusCmd = &cobra.Command{
-	Use:   "get-status",
-	Short: "Get election agent status information",
-	RunE:  getStatus,
-}
-
-func getStatus(cmd *cobra.Command, args []string) error {
-	if host == "" {
-		return errors.New("hostname is required, please use -h or --host to specify hostname")
-	}
-
-	client, err := newGrpcClient(ctx, host)
-	if err != nil {
-		reportError(err)
-	}
-
-	ret, err := client.Control.GetStatus(ctx, &eagrpc.Empty{})
-	if err != nil {
-		reportError(err)
-		return err
-	}
-	output, err := marshalJSON(ret)
-	if err != nil {
-		reportError(err)
-	}
-	fmt.Println(output)
-	return nil
 }
 
 var getActiveZoneCmd = &cobra.Command{
@@ -64,13 +38,76 @@ var getActiveZoneCmd = &cobra.Command{
 
 func getActiveZone(cmd *cobra.Command, args []string) error {
 	url := args[0]
-	resp, err := http.Get(url) //nolint:gosec
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	fmt.Printf("%s\n", body)
+	return nil
+}
+
+var getStatusCmd = &cobra.Command{
+	Use:   "get-status",
+	Short: "Get election agent status information",
+	RunE:  getStatus,
+}
+
+func getGRPCTargets(hostname string) ([]string, error) {
+	host, port, err := net.SplitHostPort(hostname)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := net.LookupIP(host)
+	if err != nil {
+		return nil, err
+	}
+
+	targets := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		targets = append(targets, net.JoinHostPort(addr.String(), port))
+	}
+
+	return targets, nil
+}
+
+func getStatus(cmd *cobra.Command, args []string) error {
+	if Hostname == "" {
+		return errors.New("hostname is required, please use -h or --host to specify hostname")
+	}
+
+	targets, err := getGRPCTargets(Hostname)
+	if err != nil {
+		return err
+	}
+
+	status := make([]*eagrpc.AgentStatus, 0, len(targets))
+	for _, target := range targets {
+		client, err := newGrpcClient(ctx, target)
+		if err != nil {
+			reportError(err)
+		}
+
+		ret, err := client.Control.GetStatus(ctx, &eagrpc.Empty{})
+		if err != nil {
+			reportError(err)
+			return err
+		}
+		status = append(status, ret)
+	}
+	output, err := marshalJSON(status)
+	if err != nil {
+		reportError(err)
+	}
+	fmt.Println(output)
 	return nil
 }
 
@@ -83,7 +120,7 @@ var setStatusCmd = &cobra.Command{
 }
 
 func setStatus(cmd *cobra.Command, args []string) error {
-	if host == "" {
+	if Hostname == "" {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
@@ -100,7 +137,7 @@ func setStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	client, err := newGrpcClient(ctx, host)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -114,7 +151,7 @@ func setStatus(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	output, err := marshalJSON(result)
+	output, err := marshalProtoJSON(result)
 	if err != nil {
 		reportError(err)
 	}

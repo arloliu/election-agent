@@ -35,11 +35,11 @@ var campaignCmd = &cobra.Command{
 }
 
 func campaign(cmd *cobra.Command, args []string) error {
-	if host == "" {
+	if Hostname == "" {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(ctx, host)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -59,7 +59,7 @@ func campaign(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	output, err := marshalJSON(result)
+	output, err := marshalProtoJSON(result)
 	if err != nil {
 		reportError(err)
 	}
@@ -75,11 +75,11 @@ var extendCmd = &cobra.Command{
 }
 
 func extendElectedTerm(cmd *cobra.Command, args []string) error {
-	if host == "" {
+	if Hostname == "" {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(ctx, host)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -99,7 +99,7 @@ func extendElectedTerm(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	output, err := marshalJSON(result)
+	output, err := marshalProtoJSON(result)
 	if err != nil {
 		reportError(err)
 	}
@@ -115,11 +115,11 @@ var resignCmd = &cobra.Command{
 }
 
 func resign(cmd *cobra.Command, args []string) error {
-	if host == "" {
+	if Hostname == "" {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(ctx, host)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -133,7 +133,7 @@ func resign(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	output, err := marshalJSON(result)
+	output, err := marshalProtoJSON(result)
 	if err != nil {
 		reportError(err)
 	}
@@ -149,11 +149,11 @@ var leaderCmd = &cobra.Command{
 }
 
 func getLeader(cmd *cobra.Command, args []string) error {
-	if host == "" {
+	if Hostname == "" {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(ctx, host)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -170,7 +170,7 @@ func getLeader(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	output, err := marshalJSON(result)
+	output, err := marshalProtoJSON(result)
 	if err != nil {
 		reportError(err)
 	}
@@ -186,11 +186,11 @@ var podsCmd = &cobra.Command{
 }
 
 func getPods(cmd *cobra.Command, args []string) error {
-	if host == "" {
+	if Hostname == "" {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(ctx, host)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -208,7 +208,7 @@ func getPods(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	output, err := marshalJSON(result)
+	output, err := marshalProtoJSON(result)
 	if err != nil {
 		reportError(err)
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,11 +33,30 @@ func newGrpcClient(ctx context.Context, host string) (*grpcClient, error) {
 	return c, nil
 }
 
-func marshalJSON(v protoreflect.ProtoMessage) (string, error) {
+func marshalProtoJSON(v protoreflect.ProtoMessage) (string, error) {
 	codec := protojson.MarshalOptions{EmitUnpopulated: true}
 	b, err := codec.Marshal(v)
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
+}
+
+func marshalJSON(v any) (string, error) {
+	// results := make([]string, 0, len(msgs))
+	// for _, v := range msgs {
+	// 	b, err := marshalJSON(v)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	// 	results = append(results, b)
+	// }
+
+	// return "[" + strings.Join(results, ",") + "]", nil
+	data, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
 }

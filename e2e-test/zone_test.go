@@ -2,6 +2,7 @@ package e2etest
 
 import (
 	"context"
+	"math/rand/v2"
 	"testing"
 
 	"election-agent/internal/agent"
@@ -107,9 +108,6 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			if err := updateActiveZone(ctx, cfg, "z2"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
-			if err := waitActiveZone(ctx, cfg, "z2", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
-			}
 
 			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.StandbyState, agent.NormalMode); err != nil {
 				t.Fatal(err.Error())
@@ -128,22 +126,12 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
-			if err := waitActiveZone(ctx, cfg, "z1", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
-			}
 
 			return ctx
 		}).Feature()
 
 	f5 := features.New("zone-test5").
 		Assess("active zone is z1, both zone-coordinator and election-agent-z2 down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
-				t.Fatalf("failed to update active zone, err:%s", err.Error())
-			}
-			if err := waitActiveZone(ctx, cfg, "z1", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
-			}
-
 			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.ActiveState, agent.NormalMode); err != nil {
 				t.Fatal(err.Error())
 			}
@@ -188,9 +176,6 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			if err := updateActiveZone(ctx, cfg, "z2"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
-			if err := waitActiveZone(ctx, cfg, "z2", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
-			}
 
 			if err := scaleDeployment(ctx, cfg, zcName, 0); err != nil {
 				t.Fatalf("failed to scale down %s deployment, err:%s", zcName, err.Error())
@@ -225,9 +210,6 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
-			if err := waitActiveZone(ctx, cfg, "z1", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
-			}
 
 			return ctx
 		}).Feature()
@@ -236,9 +218,6 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 		Assess("active zone is z1, all redis down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
-			}
-			if err := waitActiveZone(ctx, cfg, "z1", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
 			}
 
 			if err := scaleDeployment(ctx, cfg, "redis-1", 0); err != nil {
@@ -258,6 +237,10 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 				t.Fatal(err.Error())
 			}
 
+			if err := simulateTwoAgents(ctx, cfg, agent.UnavailableState, agent.UnavailableState); err != nil {
+				t.Fatal(err.Error())
+			}
+
 			return ctx
 		}).
 		Teardown(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -274,17 +257,15 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
+
 			return ctx
 		}).
 		Feature()
 
 	f8 := features.New("zone-test8").
-		Assess("active zone is z1, redis-1 down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		Assess("active zone is z2, redis-1 down, then redis-2 down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := updateActiveZone(ctx, cfg, "z2"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
-			}
-			if err := waitActiveZone(ctx, cfg, "z2", activeZoneTimeout); err != nil {
-				t.Fatal(err.Error())
 			}
 
 			if err := scaleDeployment(ctx, cfg, "redis-1", 0); err != nil {
@@ -302,17 +283,39 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 				t.Fatal(err.Error())
 			}
 
+			if err := scaleDeployment(ctx, cfg, "redis-2", 0); err != nil {
+				t.Fatalf("failed to scale down redis-2 deployment, err:%s", err.Error())
+			}
+
+			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.UnknownMode); err != nil {
+				t.Fatal(err.Error())
+			}
+			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.UnavailableState, agent.UnknownMode); err != nil {
+				t.Fatal(err.Error())
+			}
+
 			return ctx
 		}).
 		Teardown(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := scaleDeployment(ctx, cfg, "redis-1", 1); err != nil {
 				t.Fatalf("failed to scale up redis-1 deployment, err:%s", err.Error())
 			}
+			if err := scaleDeployment(ctx, cfg, "redis-2", 1); err != nil {
+				t.Fatalf("failed to scale up redis-2 deployment, err:%s", err.Error())
+			}
+			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
+				t.Fatalf("failed to update active zone, err:%s", err.Error())
+			}
 
 			return ctx
 		}).
 		Feature()
 
+	testFeatures := []features.Feature{f1, f2, f3, f4, f5, f6, f7, f8}
+	rand.Shuffle(len(testFeatures), func(i, j int) {
+		testFeatures[i], testFeatures[j] = testFeatures[j], testFeatures[i]
+	})
+
 	// test features
-	testEnv.Test(t, f1, f2, f3, f4, f5, f6, f7, f8)
+	testEnv.Test(t, testFeatures...)
 }

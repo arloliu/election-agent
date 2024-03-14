@@ -17,7 +17,6 @@ spec:
       maxSurge: 2
       maxUnavailable: 1
     type: RollingUpdate
-  minReadySeconds: 5
   template:
     metadata:
       labels:
@@ -38,7 +37,7 @@ spec:
             - name: EA_NAME
               value: election-agent-z1
             - name: EA_STATE_CACHE_TTL
-              value: 1s
+              value: 5s
 
             - name: EA_KUBE_ENABLE
               value: "false"
@@ -72,17 +71,17 @@ spec:
               port: 443
               service: liveness
             failureThreshold: 3
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            initialDelaySeconds: 3
+            periodSeconds: 5
             successThreshold: 1
-            timeoutSeconds: 5
+            timeoutSeconds: 3
           readinessProbe:
             grpc:
               port: 443
               service: readiness
             failureThreshold: 2
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            initialDelaySeconds: 3
+            periodSeconds: 5
             successThreshold: 1
             timeoutSeconds: 3
           resources:
@@ -113,7 +112,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: election-agent-headless-z1
+  name: election-agent-z1-headless
 spec:
   clusterIP: None
   selector:

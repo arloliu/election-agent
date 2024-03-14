@@ -167,7 +167,7 @@ func updateActiveZone(ctx context.Context, cfg *envconf.Config, zone string) err
 		return err
 	}
 
-	return nil
+	return waitActiveZone(ctx, cfg, zone, activeZoneTimeout)
 }
 
 func waitActiveZone(ctx context.Context, cfg *envconf.Config, zone string, timeout time.Duration) error {
@@ -229,7 +229,7 @@ func waitDeploymentScaled(cfg *envconf.Config, deployment *appsv1.Deployment, ex
 
 func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state string, mode string) error {
 	elapsed := time.Now().Add(stateChangeTimeout)
-	agentHost := svcGRPCHost(cfg, name)
+	agentHost := headlessSvcGRPCHost(cfg, name)
 	log.Printf("Expect agent %s state: %s, mode: %s, timeout: %s\n", agentHost, state, mode, stateChangeTimeout)
 	for {
 		status, err := utilGetAgentStatus(ctx, cfg, svcGRPCHost(cfg, name))
@@ -241,25 +241,25 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 			time.Sleep(time.Second)
 		}
 
-		if status.State == state && status.Mode == mode {
-			log.Printf("  * Matched, agent %s expected/actual state: %s/%s, mode: %s/%s\n", agentHost, state, status.State, mode, status.Mode)
-			return nil
-		} else {
-			log.Printf("  * Unmatched, agent %s expected/actual state: %s/%s, mode: %s/%s\n", agentHost, state, status.State, mode, status.Mode)
+		matched := true
+		for i, s := range status {
+			if s.State != state || s.Mode != mode {
+				log.Printf("  * Unmatched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
+				matched = false
+			}
 		}
-
+		if matched {
+			log.Printf("  * Matched, agent %s state: %s, mode: %s\n", agentHost, state, mode)
+			return nil
+		}
 		if time.Now().After(elapsed) {
-			return fmt.Errorf("! Wait agent %s state change timeout. should be %s state & %s mode, actual state: %s, mode: %s",
-				agentHost, state, mode, status.State, status.Mode)
+			return fmt.Errorf("! Wait agent %s state change timeout.", agentHost)
 		}
 		time.Sleep(time.Second)
 	}
 }
 
 func simulateAgent(ctx context.Context, cfg *envconf.Config, name string, state string) error {
-	// wait state cache expired
-	time.Sleep(3 * time.Second)
-
 	agentHost := svcGRPCHost(cfg, name)
 	stdout, err := utilSimluateResign(ctx, cfg, agentHost, "e2e-test-election", simNumClients, 2)
 	if err != nil {
@@ -279,9 +279,6 @@ func simulateTwoAgents(ctx context.Context, cfg *envconf.Config, z1State string,
 	var wg sync.WaitGroup
 	var simErr error
 
-	// wait state cache expired
-	time.Sleep(3 * time.Second)
-
 	z1AgentHost := svcGRPCHost(cfg, z1AgentName)
 	z2AgentHost := svcGRPCHost(cfg, z2AgentName)
 
@@ -293,31 +290,31 @@ func simulateTwoAgents(ctx context.Context, cfg *envconf.Config, z1State string,
 	}
 
 	if resignAgentHost != "" {
-		stdout, err := utilSimluateResign(ctx, cfg, resignAgentHost, "e2e-test-election", simNumClients, 2)
+		_, err := utilSimluateResign(ctx, cfg, resignAgentHost, "e2e-test-election", simNumClients, 2)
 		if err != nil {
 			return err
 		} else {
-			log.Printf("# Simulate resign %s output:\n%s\n", resignAgentHost, stdout)
+			log.Printf("# Simulate  %s resign successfully", resignAgentHost)
 		}
 	}
 
 	wg.Add(2)
 	go func() {
-		stdout, err := utilSimluate(ctx, cfg, z1AgentHost, z1State, simDuration, "e2e-test-election", simNumClients, 2)
+		_, err := utilSimluate(ctx, cfg, z1AgentHost, z1State, simDuration, "e2e-test-election", simNumClients, 2)
 		if err != nil {
 			simErr = multierr.Append(simErr, err)
 		} else {
-			log.Printf("# Simulate %s output:\n%s\n", z1AgentName, stdout)
+			log.Printf("# Simulate %s election in %s state successfully", z1AgentHost, z1State)
 		}
 		wg.Done()
 	}()
 
 	go func() {
-		stdout, err := utilSimluate(ctx, cfg, z2AgentHost, z2State, simDuration, "e2e-test-election", simNumClients, 2)
+		_, err := utilSimluate(ctx, cfg, z2AgentHost, z2State, simDuration, "e2e-test-election", simNumClients, 2)
 		if err != nil {
 			simErr = multierr.Append(simErr, err)
 		} else {
-			log.Printf("# Simulate %s output:\n%s\n", z1AgentName, stdout)
+			log.Printf("# Simulate %s election in %s state successfully", z2AgentHost, z2State)
 		}
 		wg.Done()
 	}()
@@ -385,19 +382,19 @@ func utilGetActiveZone(ctx context.Context, cfg *envconf.Config) (string, error)
 	return strings.Trim(string(stdout), "\n"), nil
 }
 
-func utilGetAgentStatus(ctx context.Context, cfg *envconf.Config, host string) (*eagrpc.AgentStatus, error) {
+func utilGetAgentStatus(ctx context.Context, cfg *envconf.Config, host string) ([]*eagrpc.AgentStatus, error) {
 	cmd := []string{"election-agent-cli", "--host", host, "control", "get-status"}
-	status := eagrpc.AgentStatus{}
+	status := []*eagrpc.AgentStatus{}
 	stdout, err := utilPodExec(ctx, cfg, cmd)
 	if err != nil {
-		return &status, err
+		return status, err
 	}
 
 	if err := json.Unmarshal(stdout, &status); err != nil {
-		return &status, fmt.Errorf("failed to decode agent status, err: %w", err)
+		return status, fmt.Errorf("failed to decode agent status, err: %w", err)
 	}
 
-	return &status, nil
+	return status, nil
 }
 
 func utilSimluate(ctx context.Context, cfg *envconf.Config, host string, state string, duration time.Duration, election string, numClients int, candidates int) (string, error) {
@@ -439,4 +436,8 @@ func utilSimluateResign(ctx context.Context, cfg *envconf.Config, host string, e
 
 func svcGRPCHost(cfg *envconf.Config, name string) string {
 	return fmt.Sprintf("%s.%s.svc:443", name, cfg.Namespace())
+}
+
+func headlessSvcGRPCHost(cfg *envconf.Config, name string) string {
+	return fmt.Sprintf("%s-headless.%s.svc:443", name, cfg.Namespace())
 }

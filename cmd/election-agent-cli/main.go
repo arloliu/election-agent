@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	host string
-	ctx  = context.Background()
+	Hostname string
+	ctx      = context.Background()
 )
 
 var rootCmd = &cobra.Command{
@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&host, "host", "h", "", "election agent hostname")
+	rootCmd.PersistentFlags().StringVarP(&Hostname, "host", "h", "", "election agent hostname")
 	rootCmd.PersistentFlags().Bool("help", false, "help for "+rootCmd.Name())
 }
 
