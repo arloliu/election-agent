@@ -232,7 +232,7 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 	agentHost := headlessSvcGRPCHost(cfg, name)
 	log.Printf("Expect agent %s state: %s, mode: %s, timeout: %s\n", agentHost, state, mode, stateChangeTimeout)
 	for {
-		status, err := utilGetAgentStatus(ctx, cfg, svcGRPCHost(cfg, name))
+		status, err := utilGetAgentStatus(ctx, cfg, agentHost)
 		if err != nil {
 			log.Printf("!  Wait agent %s state change got err: %s\n", agentHost, err.Error())
 			if time.Now().After(elapsed) {
