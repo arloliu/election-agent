@@ -43,7 +43,7 @@ func (s *ElectionGRPCService) Campaign(ctx context.Context, req *pb.CampaignRequ
 	err := s.leaseMgr.GrantLease(ctx, req.Election, req.Candidate, time.Duration(int64(req.Term)*int64(time.Millisecond)))
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			return &pb.CampaignResult{}, status.Error(codes.Unavailable, err.Error())
+			return &pb.CampaignResult{}, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return &pb.CampaignResult{Elected: false, Leader: err.Error()}, nil
 	}
@@ -65,7 +65,7 @@ func (s *ElectionGRPCService) ExtendElectedTerm(ctx context.Context, req *pb.Ext
 	err := s.leaseMgr.ExtendLease(ctx, req.Election, req.Leader, time.Duration(req.Term)*time.Millisecond)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			return &pb.BoolValue{Value: false}, status.Error(codes.Unavailable, err.Error())
+			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
 	}
@@ -84,7 +84,7 @@ func (s *ElectionGRPCService) Resign(ctx context.Context, req *pb.ResignRequest)
 	err := s.leaseMgr.RevokeLease(ctx, req.Election, req.Leader)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			return &pb.BoolValue{Value: false}, status.Error(codes.Unavailable, err.Error())
+			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
 	}
@@ -100,7 +100,7 @@ func (s *ElectionGRPCService) GetLeader(ctx context.Context, req *pb.GetLeaderRe
 	leader, err := s.leaseMgr.GetLeaseHolder(ctx, req.Election)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			return &pb.StringValue{Value: ""}, status.Error(codes.Unavailable, err.Error())
+			return &pb.StringValue{Value: ""}, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return &pb.StringValue{Value: ""}, status.Errorf(codes.NotFound, err.Error())
 	}
@@ -156,7 +156,7 @@ func (s *ControlGRPCService) SetStatus(ctx context.Context, state *pb.AgentStatu
 	}
 	err := s.zoneMgr.SetAgentState(state.State)
 	if err != nil {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
 	}
 
 	if !slices.Contains(agent.ValidModes, state.Mode) {
@@ -164,12 +164,12 @@ func (s *ControlGRPCService) SetStatus(ctx context.Context, state *pb.AgentStatu
 	}
 	err = s.zoneMgr.SetAgentMode(state.Mode)
 	if err != nil {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
 	}
 
 	err = s.zoneMgr.SetZoomEnable(state.ZoomEnable)
 	if err != nil {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unavailable, err.Error())
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
 	}
 
 	return &pb.BoolValue{Value: true}, nil

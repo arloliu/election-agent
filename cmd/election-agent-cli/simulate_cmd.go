@@ -149,7 +149,7 @@ func (s *simulateClient) resignLeaders() error {
 			for j, c := range peers {
 				if _, err := c.client.Resign(s.ctx, resignReqN(i, j)); err != nil {
 					code := status.Code(err)
-					if code != codes.NotFound && code != codes.Unavailable {
+					if code != codes.NotFound && code != codes.FailedPrecondition {
 						return err
 					}
 				}
@@ -193,7 +193,7 @@ func (s *simulateClient) chooseLeader() error {
 				case agent.UnavailableState:
 					if err == nil {
 						return fmt.Errorf("Active candidate should campaign fail and got error, elected: %t(peer: %d, idx: %d)", ret.Elected, i, j)
-					} else if status.Code(err) != codes.Unavailable {
+					} else if status.Code(err) != codes.FailedPrecondition {
 						return fmt.Errorf("Active candidate should campaign fail and got unavailable status code (peer: %d, idx: %d), error: %w", i, j, err)
 					}
 				}
@@ -234,7 +234,7 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 					case agent.UnavailableState:
 						if err == nil {
 							return fmt.Errorf("Active candidate should extend elected term fail and got error (peer: %d, idx: %d)", i, j)
-						} else if status.Code(err) != codes.Unavailable {
+						} else if status.Code(err) != codes.FailedPrecondition {
 							return fmt.Errorf("Active candidate should extend elected term fail and got unavailable status code (peer: %d, idx: %d)", i, j)
 						}
 					}
@@ -256,7 +256,7 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 					case agent.UnavailableState:
 						if err == nil {
 							return fmt.Errorf("Inactive candidate should campaign term fail and got error (peer: %d, idx: %d)", i, j)
-						} else if status.Code(err) != codes.Unavailable {
+						} else if status.Code(err) != codes.FailedPrecondition {
 							return fmt.Errorf("Inactive candidate should campaign term fail and got unavailable status code (peer: %d, idx: %d)", i, j)
 						}
 					}
