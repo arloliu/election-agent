@@ -162,7 +162,15 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 	mockConn.On("MSet", mock.Anything).
 		Return(func(pairs ...any) (bool, error) {
 			for i := 0; i < len(pairs); i += 2 {
-				cache.Store(pairs[i].(string), &cacheItem{val: pairs[i+1].(string), ttl: 0})
+				key, _ := pairs[i].(string)
+				var val string
+				switch v := pairs[i+1].(type) {
+				case string:
+					val = v
+				case bool:
+					val = boolStr(v)
+				}
+				cache.Store(key, &cacheItem{val: val, ttl: 0})
 			}
 			return true, nil
 		})
