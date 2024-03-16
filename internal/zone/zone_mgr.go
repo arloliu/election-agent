@@ -118,6 +118,12 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriv
 		logging.Warn("Initial zone manager in unavailable state")
 	}
 
+	// initial status when the default setting of zone is enabled
+	if mgr.cfg.Zone.Enable {
+		mgr.cfg.Zone.Enable = curStatus.ZoomEnable
+		mgr.leaseMgr.SetStateCache(curStatus.State)
+	}
+
 	return mgr, nil
 }
 
