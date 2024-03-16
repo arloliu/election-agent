@@ -246,10 +246,12 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 			if s.State != state || s.Mode != mode {
 				log.Printf("  * Unmatched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
 				matched = false
+			} else {
+				log.Printf("  * Martched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
 			}
 		}
 		if matched {
-			log.Printf("  * Matched(count: %d), agent %s state: %s, mode: %s\n", len(status), agentHost, state, mode)
+			log.Printf("# All Matched(count: %d), agent %s state: %s, mode: %s\n", len(status), agentHost, state, mode)
 			return nil
 		}
 		if time.Now().After(elapsed) {
@@ -363,11 +365,14 @@ func podExec(ctx context.Context, cfg *envconf.Config, deployName string, contai
 }
 
 func utilPodExec(ctx context.Context, cfg *envconf.Config, cmd []string) ([]byte, error) {
+	now := time.Now()
 	stdout, stderr, err := podExec(ctx, cfg, "election-agent-util", "election-agent-util", cmd)
+	elapsed := time.Since(now)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exec command: %s, stdout: %s, stderr: %s err: %w", strings.Join(cmd, " "), string(stdout), string(stderr), err)
+		return nil, fmt.Errorf("failed to exec command: %s\n  * elapsed:%s\n  * stdout:\n %s\n  * stderr:\n %s\n  * err:\n %w\n",
+			strings.Join(cmd, " "), elapsed, string(stdout), string(stderr), err)
 	}
-
+	log.Printf("Execute pod successed, elapsed: %s, cmd: %s\n", elapsed, strings.Join(cmd, " "))
 	return stdout, nil
 }
 

@@ -177,9 +177,24 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
 
+			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.StandbyState, agent.NormalMode); err != nil {
+				t.Fatal(err.Error())
+			}
+			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.ActiveState, agent.NormalMode); err != nil {
+				t.Fatal(err.Error())
+			}
+
 			if err := scaleDeployment(ctx, cfg, zcName, 0); err != nil {
 				t.Fatalf("failed to scale down %s deployment, err:%s", zcName, err.Error())
 			}
+
+			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.StandbyState, agent.NormalMode); err != nil {
+				t.Fatal(err.Error())
+			}
+			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.ActiveState, agent.NormalMode); err != nil {
+				t.Fatal(err.Error())
+			}
+
 			if err := scaleDeployment(ctx, cfg, z2AgentName, 0); err != nil {
 				t.Fatalf("failed to scale down %s deployment, err:%s", z2AgentName, err.Error())
 			}
