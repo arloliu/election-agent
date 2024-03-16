@@ -132,42 +132,24 @@ func newControlGRPCService(cfg *config.Config, leaseMgr *lease.LeaseManager, zon
 }
 
 func (s *ControlGRPCService) GetStatus(ctx context.Context, req *pb.Empty) (*pb.AgentStatus, error) {
-	state, err := s.zoneMgr.GetAgentState()
+	st, err := s.zoneMgr.GetAgentStatus()
 	if err != nil {
 		return &pb.AgentStatus{State: agent.UnavailableState, Mode: agent.UnknownMode}, nil
 	}
 
-	mode, err := s.zoneMgr.GetAgentMode()
-	if err != nil {
-		return &pb.AgentStatus{State: state, Mode: agent.UnknownMode}, nil
-	}
-
-	enable, err := s.zoneMgr.GetZoomEnable()
-	if err != nil {
-		return &pb.AgentStatus{State: state, Mode: mode}, nil
-	}
-
-	return &pb.AgentStatus{State: state, Mode: mode, ZoomEnable: enable}, nil
+	return &pb.AgentStatus{State: st.State, Mode: st.Mode, ZoomEnable: st.ZoomEnable}, nil
 }
 
-func (s *ControlGRPCService) SetStatus(ctx context.Context, state *pb.AgentStatus) (*pb.BoolValue, error) {
-	if !slices.Contains(agent.ValidStates, state.State) {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid state:%s", state.State))
-	}
-	err := s.zoneMgr.SetAgentState(state.State)
-	if err != nil {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
+func (s *ControlGRPCService) SetStatus(ctx context.Context, as *pb.AgentStatus) (*pb.BoolValue, error) {
+	if !slices.Contains(agent.ValidStates, as.State) {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid state:%s", as.State))
 	}
 
-	if !slices.Contains(agent.ValidModes, state.Mode) {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid mode:%s", state.Mode))
-	}
-	err = s.zoneMgr.SetAgentMode(state.Mode)
-	if err != nil {
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
+	if !slices.Contains(agent.ValidModes, as.Mode) {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid mode:%s", as.Mode))
 	}
 
-	err = s.zoneMgr.SetZoomEnable(state.ZoomEnable)
+	err := s.zoneMgr.SetAgentStatus(&agent.Status{State: as.State, Mode: as.Mode, ZoomEnable: as.ZoomEnable})
 	if err != nil {
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
 	}

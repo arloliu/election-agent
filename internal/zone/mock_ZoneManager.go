@@ -4,6 +4,8 @@ package zone
 
 import (
 	context "context"
+	agent "election-agent/internal/agent"
+
 	election_agent_v1 "election-agent/proto/election_agent/v1"
 
 	mock "github.com/stretchr/testify/mock"
@@ -87,6 +89,36 @@ func (_m *MockZoneManager) GetAgentState() (string, error) {
 		r0 = rf()
 	} else {
 		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetAgentStatus provides a mock function with given fields:
+func (_m *MockZoneManager) GetAgentStatus() (*agent.Status, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAgentStatus")
+	}
+
+	var r0 *agent.Status
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (*agent.Status, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() *agent.Status); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*agent.Status)
+		}
 	}
 
 	if rf, ok := ret.Get(1).(func() error); ok {
@@ -185,6 +217,24 @@ func (_m *MockZoneManager) SetAgentState(state string) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(string) error); ok {
 		r0 = rf(state)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// SetAgentStatus provides a mock function with given fields: status
+func (_m *MockZoneManager) SetAgentStatus(status *agent.Status) error {
+	ret := _m.Called(status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetAgentStatus")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*agent.Status) error); ok {
+		r0 = rf(status)
 	} else {
 		r0 = ret.Error(0)
 	}

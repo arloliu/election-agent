@@ -11,36 +11,39 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"election-agent/internal/config"
-	mockredis "election-agent/mocks/github.com/go-redsync/redsync/v4/redis"
 
 	"github.com/go-redsync/redsync/v4"
 	redsyncredis "github.com/go-redsync/redsync/v4/redis"
 )
 
 func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
-	pools := []redsyncredis.Pool{NewMockRedisPool(), NewMockRedisPool(), NewMockRedisPool()}
+	pools := []RedisPool{NewMockRedisPoolWithConn(), NewMockRedisPoolWithConn(), NewMockRedisPoolWithConn()}
+	redsyncPools := make([]redsyncredis.Pool, 0, len(pools))
+	for _, p := range pools {
+		redsyncPools = append(redsyncPools, redsyncredis.Pool(p))
+	}
 	driver := &RedisKVDriver{
 		ctx:         context.TODO(),
 		cfg:         cfg,
 		originPools: pools,
 		pools:       pools,
 		quorum:      len(pools)/2 + 1,
-		rs:          redsync.New(pools...),
+		rs:          redsync.New(redsyncPools...),
 		hasher:      maphash.NewHasher[string](),
 	}
 
 	return driver
 }
 
-func NewMockRedisPool() *mockredis.MockPool {
+func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 	type cacheItem struct {
 		val    string
 		active time.Time
 		ttl    time.Duration
 	}
 
-	mockConn := &mockredis.MockConn{}
-	mockPool := &mockredis.MockPool{}
+	mockConn := &MockRedisConn{}
+	mockPool := &MockRedisPool{}
 
 	mockPool.On("Get", mock.Anything).Return(mockConn, nil)
 
@@ -133,5 +136,36 @@ func NewMockRedisPool() *mockredis.MockPool {
 
 			return nil, errors.New("no script")
 		})
+
+	mockConn.On("MGet", mock.Anything).
+		Return(func(keys ...string) ([]string, error) {
+			vals := make([]string, len(keys))
+			for i, k := range keys {
+				v, ok := cache.Load(k)
+				if !ok {
+					vals[i] = ""
+					continue
+				}
+
+				item, ok := v.(*cacheItem)
+				if !ok || (item.ttl > 0 && time.Since(item.active) > item.ttl) {
+					cache.Delete(k)
+					vals[i] = ""
+					continue
+				}
+
+				vals[i] = item.val
+			}
+			return vals, nil
+		})
+
+	mockConn.On("MSet", mock.Anything).
+		Return(func(pairs ...any) (bool, error) {
+			for i := 0; i < len(pairs); i += 2 {
+				cache.Store(pairs[i].(string), &cacheItem{val: pairs[i+1].(string), ttl: 0})
+			}
+			return true, nil
+		})
+
 	return mockPool
 }

@@ -13,7 +13,6 @@ import (
 	"election-agent/internal/config"
 	"election-agent/internal/logging"
 
-	redsyncredis "github.com/go-redsync/redsync/v4/redis"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +87,7 @@ func TestRedisKVDriver_isRedisUnhealthy(t *testing.T) {
 	require := require.New(t)
 
 	rd := &RedisKVDriver{
-		pools:  []redsyncredis.Pool{nil, nil, nil},
+		pools:  []RedisPool{nil, nil, nil},
 		quorum: 2,
 	}
 	err := errors.New("error")
@@ -143,7 +142,7 @@ func TestRedisKVDriver_getMostFreqVal(t *testing.T) {
 func TestRedisKVDriver_mocks(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
-	mockPool := NewMockRedisPool()
+	mockPool := NewMockRedisPoolWithConn()
 
 	conn, _ := mockPool.Get(ctx)
 	require.NotNil(conn)
@@ -188,8 +187,36 @@ func TestRedisKVDriver_redisGetAsync(t *testing.T) {
 	require.Equal("val1", val)
 
 	val, err = driver.redisGetAsync(ctx, "key2", true)
-	require.Error(err)
+	require.NoError(err)
 	require.Equal("", val)
+}
+
+func TestRedisKVDriver_redisMGetAsync(t *testing.T) {
+	require := require.New(t)
+	ctx := context.TODO()
+	driver := NewMockRedisKVDriver(&config.Config{})
+
+	poolSet(driver, require, "key1", "val1")
+	poolSet(driver, require, "key2", "val2")
+	vals, err := driver.redisMGetAsync(ctx, "key1", "key2")
+	require.NoError(err)
+	require.Equal("val1", vals[0])
+	require.Equal("val2", vals[1])
+}
+
+func TestRedisKVDriver_MSet(t *testing.T) {
+	require := require.New(t)
+	ctx := context.TODO()
+	driver := NewMockRedisKVDriver(&config.Config{})
+
+	n, err := driver.MSet(ctx, "key1", "val1", "key2", "val2")
+	require.NoError(err)
+	require.Equal(3, n)
+
+	vals, err := driver.redisMGetAsync(ctx, "key1", "key2")
+	require.NoError(err)
+	require.Equal("val1", vals[0])
+	require.Equal("val2", vals[1])
 }
 
 func poolSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {

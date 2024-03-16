@@ -200,6 +200,11 @@ func newMockZoneManager(ctx context.Context, cfg *config.Config) (*mockComponent
 			return m.zm.SetAgentMode(mode)
 		})
 
+	mockMgr.On("SetAgentStatus", mock.AnythingOfType("*agent.Status")).
+		Return(func(status *agent.Status) error {
+			return m.zm.SetAgentStatus(status)
+		})
+
 	mockMgr.On("SetOpearationMode", mock.AnythingOfType("string")).Return()
 	mockMgr.On("GetZoomEnable").
 		Return(func() (bool, error) {

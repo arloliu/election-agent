@@ -23,19 +23,24 @@ import (
 	eagrpc "election-agent/proto/election_agent/v1"
 )
 
-const ZoneEnableKey = "zone_enable"
-
 type ZoneManager interface {
 	Start() error
 	Shutdown(ctx context.Context) error
 	GetActiveZone() (string, error)
 	GetPeerStatus() ([]*eagrpc.AgentStatus, error)
 	SetPeerStatus(status *eagrpc.AgentStatus) error
+
 	GetAgentState() (string, error)
 	SetAgentState(state string) error
+
 	GetAgentMode() (string, error)
 	SetAgentMode(mode string) error
+
+	GetAgentStatus() (*agent.Status, error)
+	SetAgentStatus(status *agent.Status) error
+
 	SetOpearationMode(mode string)
+
 	GetZoomEnable() (bool, error)
 	SetZoomEnable(enable bool) error
 }
@@ -75,22 +80,6 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriv
 		peerClients: make([]eagrpc.ControlClient, 0, len(cfg.Zone.PeerURLs)),
 	}
 
-	curState, err := mgr.GetAgentState()
-	if err != nil {
-		return nil, err
-	}
-
-	if curState != agent.UnavailableState {
-		if err := mgr.SetAgentState(cfg.DefaultState); err != nil {
-			return nil, err
-		}
-		if err := mgr.SetZoomEnable(cfg.Zone.Enable); err != nil {
-			return nil, err
-		}
-	} else {
-		logging.Warn("Initial zone manager in unavailable state")
-	}
-
 	if !cfg.Zone.Enable {
 		return mgr, nil
 	}
@@ -119,6 +108,15 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriv
 		return nil, err
 	}
 	mgr.peerClients = peerClients
+
+	curStatus, err := mgr.GetAgentStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	if curStatus.State == agent.UnavailableState {
+		logging.Warn("Initial zone manager in unavailable state")
+	}
 
 	return mgr, nil
 }
@@ -286,12 +284,20 @@ func (zm *zoneManager) SetAgentMode(mode string) error {
 	return zm.driver.SetAgentMode(mode)
 }
 
+func (zm *zoneManager) GetAgentStatus() (*agent.Status, error) {
+	return zm.driver.GetAgentStatus()
+}
+
+func (zm *zoneManager) SetAgentStatus(status *agent.Status) error {
+	return zm.driver.SetAgentStatus(status)
+}
+
 func (zm *zoneManager) SetOpearationMode(mode string) {
 	zm.driver.SetOpearationMode(mode)
 }
 
 func (zm *zoneManager) GetZoomEnable() (bool, error) {
-	enable, err := zm.driver.GetSetBool(zm.ctx, zm.cfg.AgentInfoKey(ZoneEnableKey), zm.cfg.Zone.Enable, false)
+	enable, err := zm.driver.GetSetBool(zm.ctx, zm.cfg.AgentInfoKey(agent.ZoneEnableKey), zm.cfg.Zone.Enable, false)
 	if err != nil {
 		return zm.cfg.Zone.Enable, err
 	}
@@ -299,7 +305,7 @@ func (zm *zoneManager) GetZoomEnable() (bool, error) {
 }
 
 func (zm *zoneManager) SetZoomEnable(enable bool) error {
-	_, err := zm.driver.SetBool(zm.ctx, zm.cfg.AgentInfoKey(ZoneEnableKey), enable, false)
+	_, err := zm.driver.SetBool(zm.ctx, zm.cfg.AgentInfoKey(agent.ZoneEnableKey), enable, false)
 	zm.cfg.Zone.Enable = enable
 	return err
 }
@@ -312,7 +318,7 @@ func (zm *zoneManager) createPeerClients() ([]eagrpc.ControlClient, error) {
 			"waitForReady": true,
 			"timeout": "0.5s",
 			"retryPolicy": {
-				"maxAttempts": 1,
+				"maxAttempts": 3,
 				"initialBackoff": "0.1s",
 				"maxBackoff": "1s",
 				"backoffMultiplier": 2.0,
@@ -336,38 +342,22 @@ func (zm *zoneManager) createPeerClients() ([]eagrpc.ControlClient, error) {
 
 func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	var err error
-	status := &zoneStatus{zoomEnable: false, mode: agent.UnknownMode, zcConnected: false, peerConnected: true}
+	status := &zoneStatus{zoomEnable: zm.cfg.Zone.Enable, mode: agent.UnknownMode, zcConnected: false, peerConnected: true}
 
-	status.state, err = zm.GetAgentState()
+	kvStatus, err := zm.driver.GetAgentStatus()
 	if err != nil {
-		logging.Warnw("Failed to get current agent state",
+		logging.Warnw("Failed to get current agent status",
 			"agent", zm.cfg.Name,
 			"zone", zm.cfg.Zone.Name,
 			"error", err,
 		)
 	}
-	unavailableState := status.state == agent.UnavailableState
-
-	status.zoomEnable, err = zm.GetZoomEnable()
-	if err != nil && !unavailableState {
-		logging.Warnw("Failed to get zoom enable",
-			"agent", zm.cfg.Name,
-			"zone", zm.cfg.Zone.Name,
-			"error", err,
-		)
-	}
+	status.state = kvStatus.State
+	status.mode = kvStatus.Mode
+	status.zoomEnable = kvStatus.ZoomEnable
 
 	if !status.zoomEnable {
 		return status
-	}
-
-	status.mode, err = zm.driver.GetAgentMode()
-	if err != nil && !unavailableState {
-		logging.Warnw("Failed to get agent mode",
-			"agent", zm.cfg.Name,
-			"zone", zm.cfg.Zone.Name,
-			"error", err,
-		)
 	}
 
 	status.activeZone, err = zm.GetActiveZone()
@@ -385,7 +375,7 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 
 // Check zone and peers status and set proper agent state and mode.
 // This method is seperated from zoneManager to support unit testing.
-func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm ZoneManager, lm *lease.LeaseManager) { //nolint:cyclop
+func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm ZoneManager, lm *lease.LeaseManager) {
 	if !status.zoomEnable {
 		return
 	}
@@ -441,7 +431,7 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm Z
 	// 1. set operation mode
 	zm.SetOpearationMode(status.newMode)
 
-	// 2. Change agent mode
+	// 2. update agent state & mode
 	if status.mode != status.newMode {
 		logging.Infow("Change agent mode",
 			"agent", cfg.Name,
@@ -449,38 +439,29 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm Z
 			"old_mode", status.mode,
 			"new_mode", status.newMode,
 		)
-		// change the mode stored in kv store to update the mode of other agent replicas.
-		// other agent replicas will use `GetAgentMode` to retreive the mode.
-		err = zm.SetAgentMode(status.newMode)
-		if err != nil && !unavailableState {
-			logging.Errorw("Failed to set agent mode",
-				"agent", cfg.Name,
-				"zone", cfg.Zone.Name,
-				"mode", status.newMode,
-				"error", err,
-			)
-		}
 	}
 
-	// 3. set agent state
-	logging.Debugw("SetAgentState",
+	logging.Debugw("SetAgentStatus",
 		"state", status.state, "newState", status.newState, "mode", status.mode, "newMode", status.newMode,
 		"hostname", os.Getenv("HOSTNAME"),
 	)
-	err = zm.SetAgentState(status.newState)
+	err = zm.SetAgentStatus(&agent.Status{State: status.newState, Mode: status.newMode, ZoomEnable: status.zoomEnable})
 	if err != nil {
-		logging.Errorw("Failed to update agent state",
+		logging.Errorw("Failed to update agent status",
 			"agent", cfg.Name,
 			"zone", cfg.Zone.Name,
-			"state", status.newState,
+			"state", status.state,
+			"newState", status.newState,
+			"mode", status.mode,
+			"newMode", status.newMode,
 			"error", err,
 		)
 	}
 
-	// 4. notify lease manager to update agent state cache
+	// 3. notify lease manager to update agent state cache
 	lm.SetStateCache(status.newState)
 
-	// 5. notify agent peers to enter standby mode if this agent becomes active one
+	// 4. notify agent peers to enter standby mode if this agent becomes active one
 	if status.newState == agent.ActiveState && status.peerConnected {
 		err := zm.SetPeerStatus(&eagrpc.AgentStatus{State: agent.StandbyState, Mode: agent.NormalMode, ZoomEnable: true})
 		if err != nil {

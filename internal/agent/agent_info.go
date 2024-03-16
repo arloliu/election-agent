@@ -23,9 +23,16 @@ const (
 var ValidModes = []string{NormalMode, OrphanMode, UnknownMode}
 
 const (
-	StateKey = "state"
-	ModeKey  = "mode"
+	StateKey      = "state"
+	ModeKey       = "mode"
+	ZoneEnableKey = "zone_enable"
 )
+
+type Status struct {
+	State      string
+	Mode       string
+	ZoomEnable bool
+}
 
 type State struct {
 	val  atomic.Value

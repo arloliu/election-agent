@@ -6,8 +6,10 @@ packages:
       inpackage: true
     interfaces:
       ZoneManager:
-  github.com/go-redsync/redsync/v4/redis:
+  election-agent/internal/driver:
+    config:
+      dir: internal/driver
+      inpackage: true
     interfaces:
-      Script:
-      Pool:
-      Conn:
+      RedisConn:
+      RedisPool:

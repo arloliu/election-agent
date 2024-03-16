@@ -72,7 +72,7 @@ clean-bins:
 # Generate targets
 mock-gen:
 	@printf "Generate interface mocks...\n"
-	@mockery
+	@mockery --unroll-variadic=false
 
 proto-gen:
 	@protoc -I proto/ --go_out=proto/ --go-grpc_out=proto/ --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative  ./proto/election_agent/v1/*.proto
