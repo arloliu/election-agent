@@ -271,7 +271,7 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 }
 
 func simulateClients(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), simDuration+5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), simDuration)
 	defer cancel()
 
 	if leaderResign {
