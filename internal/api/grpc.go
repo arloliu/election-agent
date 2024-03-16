@@ -62,14 +62,36 @@ func (s *ElectionGRPCService) ExtendElectedTerm(ctx context.Context, req *pb.Ext
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "The field 'term' must >= 1000")
 	}
 
-	err := s.leaseMgr.ExtendLease(ctx, req.Election, req.Leader, time.Duration(req.Term)*time.Millisecond)
+	if req.Retries < 0 || req.Retries > 10 {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "The field 'retres' must in 0 ~ 10")
+	}
+
+	if req.RetryInterval < 0 || req.RetryInterval > 1000 {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "The field 'retry_interval' must in 0 ~ 1000")
+	}
+
+	retryInterval := time.Duration(req.RetryInterval) * time.Millisecond
+
+	var err error
+	for i := 0; i <= int(req.Retries); i++ {
+		err = s.leaseMgr.ExtendLease(ctx, req.Election, req.Leader, time.Duration(req.Term)*time.Millisecond)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryInterval)
+	}
+
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
+		} else if lease.IsTakenError(err) {
+			return &pb.BoolValue{Value: false}, status.Errorf(codes.AlreadyExists, err.Error())
+		} else if lease.IsNonexistError(err) {
+			return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
 		}
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
-	}
 
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unknown, err.Error())
+	}
 	return &pb.BoolValue{Value: true}, nil
 }
 

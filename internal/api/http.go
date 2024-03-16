@@ -60,8 +60,10 @@ type CampaignResult struct {
 }
 
 type ExtendElectedTermRequest struct {
-	Leader string `json:"leader" binding:"required"`
-	Term   int32  `json:"term" binding:"required,gte=1000"`
+	Leader        string `json:"leader" binding:"required"`
+	Term          int32  `json:"term" binding:"required,gte=1000"`
+	Retries       int32  `json:"retries" binding:"gte=0,lte=10"`
+	RetryInterval int32  `json:"retry_interval" binding:"gte=0,lte=1000"`
 }
 
 type ResignRequest struct {
@@ -79,7 +81,7 @@ func (s *ElectionHTTPService) getLeader(c *gin.Context) {
 	leader, err := s.leaseMgr.GetLeaseHolder(s.ctx, election)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("No leader found for the election %s", election)})
@@ -106,7 +108,7 @@ func (s *ElectionHTTPService) campaign(c *gin.Context) {
 	err := s.leaseMgr.GrantLease(s.ctx, election, body.Candidate, time.Duration(body.Term)*time.Millisecond)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"elected": false, "leader": ""})
@@ -129,13 +131,27 @@ func (s *ElectionHTTPService) extendElectedTerm(c *gin.Context) {
 		return
 	}
 
-	err := s.leaseMgr.ExtendLease(s.ctx, election, body.Leader, time.Duration(body.Term)*time.Millisecond)
+	retryInterval := time.Duration(body.RetryInterval) * time.Millisecond
+
+	var err error
+	for i := 0; i <= int(body.Retries); i++ {
+		err = s.leaseMgr.ExtendLease(s.ctx, election, body.Leader, time.Duration(body.Term)*time.Millisecond)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryInterval)
+	}
+
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
-			return
+			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
+		} else if lease.IsTakenError(err) {
+			c.JSON(http.StatusConflict, gin.H{"message": err.Error()})
+		} else if lease.IsNonexistError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
 		}
-		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 
@@ -159,7 +175,7 @@ func (s *ElectionHTTPService) resign(c *gin.Context) {
 	err := s.leaseMgr.RevokeLease(s.ctx, election, body.Leader)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": err.Error()})
+			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})

@@ -66,6 +66,10 @@ message ExtendElectedTermRequest {
   string leader = 2;
   // the number of milliseconds for this election term
   int32 term = 3;
+  // the number of retries, betwwen 0 ~ 10
+  int32 retries = 4;
+  // the number of milliseconds between retries, between 0 ~ 1000ms
+  int32 retry_interval = 5;
 }
 
 message ResignRequest {

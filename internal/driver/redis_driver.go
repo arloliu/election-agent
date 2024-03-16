@@ -71,11 +71,15 @@ func (rl *RedisLease) Extend(ctx context.Context) error {
 		if rl.driver.isRedisUnhealthy(err) {
 			return &lease.UnavailableError{Err: err}
 		}
-
-		return fmt.Errorf("Failed to extend lease %s, got error: %w", rl.mu.Name(), err)
+		errTaken := &redsync.ErrTaken{}
+		if errors.As(err, &errTaken) {
+			e, _ := err.(*redsync.ErrTaken) //nolint:errorlint
+			return &lease.TakenError{Nodes: e.Nodes}
+		}
+		return &lease.ExtendFailError{Lease: rl.mu.Name(), Err: err}
 	}
 	if !ok {
-		return fmt.Errorf("Failed to extend lease %s", rl.mu.Name())
+		return &lease.NonexistError{Lease: rl.mu.Name()}
 	}
 
 	return nil

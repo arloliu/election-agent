@@ -67,8 +67,48 @@ func (e UnavailableError) Error() string {
 	return fmt.Errorf("service unavailable, error: %w", e.Err).Error()
 }
 
+type TakenError struct {
+	Nodes []int
+}
+
+func (e TakenError) Error() string {
+	return fmt.Sprintf("lease already taken, locked nodes: %v", e.Nodes)
+}
+
+type NonexistError struct {
+	Lease string
+}
+
+func (e NonexistError) Error() string {
+	return fmt.Errorf("The lease %s doesn't exist", e.Lease).Error()
+}
+
+type ExtendFailError struct {
+	Lease string
+	Err   error
+}
+
+func (e ExtendFailError) Error() string {
+	return fmt.Errorf("Failed to extend lease %s, got error: %w", e.Lease, e.Err).Error()
+}
+
 func IsUnavailableError(err error) bool {
 	uerr := &UnavailableError{}
+	return errors.As(err, &uerr)
+}
+
+func IsTakenError(err error) bool {
+	uerr := &TakenError{}
+	return errors.As(err, &uerr)
+}
+
+func IsNonexistError(err error) bool {
+	uerr := &NonexistError{}
+	return errors.As(err, &uerr)
+}
+
+func IsExtendFailError(err error) bool {
+	uerr := &ExtendFailError{}
 	return errors.As(err, &uerr)
 }
 

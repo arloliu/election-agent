@@ -68,9 +68,9 @@ func campaign(cmd *cobra.Command, args []string) error {
 }
 
 var extendCmd = &cobra.Command{
-	Use:   "extend <election> <leader> <term>",
+	Use:   "extend <election> <leader> <term> [retries] [retry interval]",
 	Short: "Extend the elected term",
-	Args:  cobra.ExactArgs(3),
+	Args:  cobra.MinimumNArgs(3),
 	RunE:  extendElectedTerm,
 }
 
@@ -89,10 +89,30 @@ func extendElectedTerm(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
+	var retries int32 = 0
+	var retry_interval int32 = 0
+	if len(args) >= 4 {
+		n, err := strconv.Atoi(args[3])
+		if err != nil {
+			reportError(err)
+		}
+		retries = int32(n) //nolint:gosec
+	}
+
+	if len(args) >= 5 {
+		n, err := strconv.Atoi(args[4])
+		if err != nil {
+			reportError(err)
+		}
+		retry_interval = int32(n) //nolint:gosec
+	}
+
 	req := &eagrpc.ExtendElectedTermRequest{
-		Election: args[0],
-		Leader:   args[1],
-		Term:     int32(term), //nolint:gosec
+		Election:      args[0],
+		Leader:        args[1],
+		Term:          int32(term), //nolint:gosec
+		Retries:       retries,
+		RetryInterval: retry_interval,
 	}
 	result, err := client.Election.ExtendElectedTerm(ctx, req)
 	if err != nil {
