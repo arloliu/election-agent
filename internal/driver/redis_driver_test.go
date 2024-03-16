@@ -254,7 +254,7 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 		require.False(ok)
 	}
 
-	lease := driver.NewLease("test", "replica1", 3*time.Second)
+	lease := driver.NewLease("test", "", "replica1", 3*time.Second)
 	require.NotNil(lease)
 
 	err = lease.Grant(ctx)

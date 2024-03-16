@@ -40,7 +40,7 @@ func (s *ElectionGRPCService) Campaign(ctx context.Context, req *pb.CampaignRequ
 		return &pb.CampaignResult{}, status.Errorf(codes.InvalidArgument, "The field 'term' must >= 1000")
 	}
 
-	err := s.leaseMgr.GrantLease(ctx, req.Election, req.Candidate, time.Duration(int64(req.Term)*int64(time.Millisecond)))
+	err := s.leaseMgr.GrantLease(ctx, req.Election, req.Kind, req.Candidate, time.Duration(int64(req.Term)*int64(time.Millisecond)))
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.CampaignResult{}, status.Error(codes.FailedPrecondition, err.Error())
@@ -74,7 +74,7 @@ func (s *ElectionGRPCService) ExtendElectedTerm(ctx context.Context, req *pb.Ext
 
 	var err error
 	for i := 0; i <= int(req.Retries); i++ {
-		err = s.leaseMgr.ExtendLease(ctx, req.Election, req.Leader, time.Duration(req.Term)*time.Millisecond)
+		err = s.leaseMgr.ExtendLease(ctx, req.Election, req.Kind, req.Leader, time.Duration(req.Term)*time.Millisecond)
 		if err == nil {
 			break
 		}
@@ -103,7 +103,7 @@ func (s *ElectionGRPCService) Resign(ctx context.Context, req *pb.ResignRequest)
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "Empty field 'leader'")
 	}
 
-	err := s.leaseMgr.RevokeLease(ctx, req.Election, req.Leader)
+	err := s.leaseMgr.RevokeLease(ctx, req.Election, req.Kind, req.Leader)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
@@ -119,7 +119,7 @@ func (s *ElectionGRPCService) GetLeader(ctx context.Context, req *pb.GetLeaderRe
 		return &pb.StringValue{Value: ""}, status.Errorf(codes.InvalidArgument, "Empty field 'election'")
 	}
 
-	leader, err := s.leaseMgr.GetLeaseHolder(ctx, req.Election)
+	leader, err := s.leaseMgr.GetLeaseHolder(ctx, req.Election, req.Kind)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.StringValue{Value: ""}, status.Error(codes.FailedPrecondition, err.Error())

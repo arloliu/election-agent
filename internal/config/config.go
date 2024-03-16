@@ -54,10 +54,6 @@ type Config struct {
 	Redis RedisConfig `yaml:"redis"`
 }
 
-func (cfg *Config) LeaseKey(lease string) string {
-	return cfg.KeyPrefix + "/lease/" + lease
-}
-
 func (cfg *Config) AgentInfoKey(field string) string {
 	return cfg.KeyPrefix + "/info/" + cfg.Name + "/" + field
 }

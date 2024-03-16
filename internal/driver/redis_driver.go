@@ -25,6 +25,7 @@ import (
 // RedisLease implements Lease interface
 type RedisLease struct {
 	id     uint64
+	kind   string
 	mu     *redsync.Mutex
 	driver *RedisKVDriver
 }
@@ -59,7 +60,7 @@ func (rl *RedisLease) Revoke(ctx context.Context) error {
 			return nil
 		}
 
-		val, _ := rl.driver.GetHolder(ctx, rl.mu.Name())
+		val, _ := rl.driver.GetHolder(ctx, rl.mu.Name(), rl.kind)
 		return fmt.Errorf("Failed to revoke lease %s, expected value:%s, actual value:%s, error: %w\n", rl.mu.Name(), rl.mu.Value(), val, err)
 	}
 	return nil
@@ -191,25 +192,29 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 	return inst, err
 }
 
-func (rd *RedisKVDriver) LeaseID(name string, holder string, ttl time.Duration) uint64 {
-	return rd.hasher.Hash(name + holder + strconv.FormatInt(int64(ttl), 16))
+func (rd *RedisKVDriver) LeaseID(name string, kind string, holder string, ttl time.Duration) uint64 {
+	return rd.hasher.Hash(name + kind + holder + strconv.FormatInt(int64(ttl), 16))
 }
 
-func (rd *RedisKVDriver) GetHolder(ctx context.Context, name string) (string, error) {
-	key := rd.leaseKey(name)
+func (rd *RedisKVDriver) GetHolder(ctx context.Context, name string, kind string) (string, error) {
+	key := rd.leaseKey(name, kind)
 	ctx, cancel := context.WithTimeout(ctx, rd.cfg.Redis.OpearationTimeout)
 	defer cancel()
 	return rd.redisGetAsync(ctx, key, true)
 }
 
-func (rd *RedisKVDriver) NewLease(name string, holder string, ttl time.Duration) lease.Lease {
+func (rd *RedisKVDriver) NewLease(name string, kind string, holder string, ttl time.Duration) lease.Lease {
 	rd.mu.Lock()
 	defer rd.mu.Unlock()
+	if kind == "" {
+		kind = "default"
+	}
 
 	lease := &RedisLease{
-		id: rd.LeaseID(name, holder, ttl),
+		id:   rd.LeaseID(name, kind, holder, ttl),
+		kind: kind,
 		mu: rd.rs.NewMutex(
-			rd.leaseKey(name),
+			rd.leaseKey(name, kind),
 			redsync.WithExpiry(ttl),
 			redsync.WithTries(1),
 			redsync.WithSetNXOnExtend(),
@@ -474,8 +479,8 @@ func (rd *RedisKVDriver) MSet(ctx context.Context, pairs ...any) (int, error) {
 	})
 }
 
-func (rd *RedisKVDriver) leaseKey(val string) string {
-	return rd.cfg.KeyPrefix + "/lease/" + val
+func (rd *RedisKVDriver) leaseKey(lease string, kind string) string {
+	return rd.cfg.KeyPrefix + "/lease/" + kind + "/" + lease
 }
 
 func (rd *RedisKVDriver) lockKey(val string) string {

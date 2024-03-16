@@ -22,10 +22,10 @@ type Mutex interface {
 }
 
 type KVDriver interface {
-	LeaseID(name string, holder string, ttl time.Duration) uint64
-	NewLease(name string, holder string, ttl time.Duration) Lease
+	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
+	NewLease(name string, kind string, holder string, ttl time.Duration) Lease
 	NewMutex(name string, ttl time.Duration) Mutex
-	GetHolder(ctx context.Context, name string) (string, error)
+	GetHolder(ctx context.Context, name string, kind string) (string, error)
 	Shutdown(ctx context.Context) error
 
 	// GetAgentMode gets agent mode.

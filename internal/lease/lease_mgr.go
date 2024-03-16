@@ -42,22 +42,22 @@ func NewLeaseManager(ctx context.Context, cfg *config.Config, driver KVDriver) *
 	return mgr
 }
 
-func (lm *LeaseManager) GetLease(ctx context.Context, name string, holder string, ttl time.Duration) Lease {
+func (lm *LeaseManager) GetLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) Lease {
 	if lm.cfg.Lease.Cache {
-		id := lm.driver.LeaseID(name, holder, ttl)
+		id := lm.driver.LeaseID(name, kind, holder, ttl)
 		if lease, ok := lm.cache.Get(id); ok {
 			return lease
 		}
-		lease := lm.driver.NewLease(name, holder, ttl)
+		lease := lm.driver.NewLease(name, kind, holder, ttl)
 		lm.cache.Add(id, lease)
 
 		return lease
 	}
 
-	return lm.driver.NewLease(name, holder, ttl)
+	return lm.driver.NewLease(name, kind, holder, ttl)
 }
 
-func (lm *LeaseManager) GrantLease(ctx context.Context, name string, holder string, ttl time.Duration) error {
+func (lm *LeaseManager) GrantLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) error {
 	state := lm.GetState()
 	if state == agent.UnavailableState {
 		return ErrServiceUnavalable
@@ -65,11 +65,11 @@ func (lm *LeaseManager) GrantLease(ctx context.Context, name string, holder stri
 		return ErrAgentStandby
 	}
 
-	lease := lm.GetLease(ctx, name, holder, ttl)
+	lease := lm.GetLease(ctx, name, kind, holder, ttl)
 	return lease.Grant(ctx)
 }
 
-func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, holder string) error {
+func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, kind string, holder string) error {
 	state := lm.GetState()
 	if state == agent.UnavailableState {
 		return ErrServiceUnavalable
@@ -77,14 +77,14 @@ func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, holder str
 		return ErrAgentStandby
 	}
 
-	lease := lm.GetLease(ctx, name, holder, 0)
+	lease := lm.GetLease(ctx, name, kind, holder, 0)
 	if lm.cfg.Lease.Cache {
 		lm.cache.Remove(lease.ID())
 	}
 	return lease.Revoke(ctx)
 }
 
-func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, holder string, ttl time.Duration) error {
+func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) error {
 	state := lm.GetState()
 	if state == agent.UnavailableState {
 		return ErrServiceUnavalable
@@ -92,12 +92,12 @@ func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, holder str
 		return ErrAgentStandby
 	}
 
-	lease := lm.GetLease(ctx, name, holder, ttl)
+	lease := lm.GetLease(ctx, name, kind, holder, ttl)
 	return lease.Extend(ctx)
 }
 
-func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string) (string, error) {
-	return lm.driver.GetHolder(ctx, name)
+func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind string) (string, error) {
+	return lm.driver.GetHolder(ctx, name, kind)
 }
 
 func (lm *LeaseManager) GetState() string {

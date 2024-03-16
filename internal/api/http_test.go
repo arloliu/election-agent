@@ -45,59 +45,78 @@ func TestHTTPService(t *testing.T) {
 	router := server.httpRouter
 
 	// client1 campaign election1
-	statusCode, resp, err := sendCampaign(router, "election1", "client1", 3000)
+	statusCode, resp, err := sendCampaign(router, "election1", "kind1", "client1", 3000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 	require.Equal(true, resp.Elected)
 	require.Equal("client1", resp.Leader)
 
-	// client1 campaign election2
-	statusCode, resp, err = sendCampaign(router, "election2", "client1", 1000)
+	// client1 campaign kind1/election2
+	statusCode, resp, err = sendCampaign(router, "election2", "kind1", "client1", 1000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 	require.Equal(true, resp.Elected)
 	require.Equal("client1", resp.Leader)
 
-	// client2 campaign election1
-	statusCode, resp, err = sendCampaign(router, "election1", "client2", 3000)
+	// client2 campaign kind1/election1
+	statusCode, resp, err = sendCampaign(router, "election1", "kind1", "client2", 3000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 	require.Equal(false, resp.Elected)
 	require.Equal("", resp.Leader)
 
-	// client1 campaign election1 again
-	statusCode, resp, err = sendCampaign(router, "election1", "client1", 3000)
+	// client1 campaign kind1/election1 again
+	statusCode, resp, err = sendCampaign(router, "election1", "kind1", "client1", 3000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 	require.Equal(false, resp.Elected)
 	require.Equal("", resp.Leader)
 
-	// client1 extend elected term of election1
-	statusCode, err = sendExtendElectedTerm(router, "election1", "client1", 3000)
+	// client1 extend elected term of kind1/election1
+	statusCode, err = sendExtendElectedTerm(router, "election1", "kind1", "client1", 3000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 
-	// client1 resign for election1
-	statusCode, err = sendResign(router, "election1", "client1")
+	// client1 resign for kind1/election1
+	statusCode, err = sendResign(router, "election1", "kind1", "client1")
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 
-	// client1 campaign election1 again
-	statusCode, resp, err = sendCampaign(router, "election1", "client1", 3000)
+	// client1 campaign kind1/election1 again
+	statusCode, resp, err = sendCampaign(router, "election1", "kind1", "client1", 3000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 	require.Equal(true, resp.Elected)
 	require.Equal("client1", resp.Leader)
 
-	// client2 campaign election1 again
-	statusCode, resp, err = sendCampaign(router, "election1", "client2", 3000)
+	// client1 campaign kind2/election1
+	statusCode, resp, err = sendCampaign(router, "election1", "kind2", "client1", 3000)
+	require.NoError(err)
+	require.Equal(http.StatusOK, statusCode)
+	require.Equal(true, resp.Elected)
+	require.Equal("client1", resp.Leader)
+
+	// client2 campaign kind1/election1 again
+	statusCode, resp, err = sendCampaign(router, "election1", "kind1", "client2", 3000)
 	require.NoError(err)
 	require.Equal(http.StatusOK, statusCode)
 	require.Equal(false, resp.Elected)
 	require.Equal("", resp.Leader)
+
+	// client2 campaign kind2/election1
+	statusCode, resp, err = sendCampaign(router, "election1", "kind2", "client2", 3000)
+	require.NoError(err)
+	require.Equal(http.StatusOK, statusCode)
+	require.Equal(false, resp.Elected)
+	require.Equal("", resp.Leader)
+
+	// client1 resign for kind2/election1
+	statusCode, err = sendResign(router, "election1", "kind2", "client1")
+	require.NoError(err)
+	require.Equal(http.StatusOK, statusCode)
 }
 
-func sendCampaign(router *gin.Engine, election string, candidate string, term int32) (int, *CampaignResult, error) {
+func sendCampaign(router *gin.Engine, election string, kind string, candidate string, term int32) (int, *CampaignResult, error) {
 	req := CampaignRequest{Candidate: candidate, Term: term}
 	body, err := json.Marshal(&req)
 	if err != nil {
@@ -105,7 +124,7 @@ func sendCampaign(router *gin.Engine, election string, candidate string, term in
 		return http.StatusInternalServerError, nil, err
 	}
 
-	r, respBytes, err := sendRequest(router, "POST", fmt.Sprintf("/election/%s", election), bytes.NewBuffer(body))
+	r, respBytes, err := sendRequest(router, "POST", fmt.Sprintf("/election/%s/%s", kind, election), bytes.NewBuffer(body))
 	if err != nil {
 		logging.Errorw("sendRequest fail", "err", err)
 		return http.StatusInternalServerError, nil, err
@@ -125,14 +144,14 @@ func sendCampaign(router *gin.Engine, election string, candidate string, term in
 	return r.Code, &resp, nil
 }
 
-func sendExtendElectedTerm(router *gin.Engine, election string, leader string, term int32) (int, error) {
+func sendExtendElectedTerm(router *gin.Engine, election string, kind string, leader string, term int32) (int, error) {
 	req := ExtendElectedTermRequest{Leader: leader, Term: term}
 	body, err := json.Marshal(&req)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 
-	r, _, err := sendRequest(router, "PATCH", fmt.Sprintf("/election/%s", election), bytes.NewBuffer(body))
+	r, _, err := sendRequest(router, "PATCH", fmt.Sprintf("/election/%s/%s", kind, election), bytes.NewBuffer(body))
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -140,14 +159,14 @@ func sendExtendElectedTerm(router *gin.Engine, election string, leader string, t
 	return r.Code, nil
 }
 
-func sendResign(router *gin.Engine, election string, leader string) (int, error) {
+func sendResign(router *gin.Engine, election string, kind string, leader string) (int, error) {
 	req := ResignRequest{Leader: leader}
 	body, err := json.Marshal(&req)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 
-	r, _, err := sendRequest(router, "DELETE", fmt.Sprintf("/election/%s", election), bytes.NewBuffer(body))
+	r, _, err := sendRequest(router, "DELETE", fmt.Sprintf("/election/%s/%s", kind, election), bytes.NewBuffer(body))
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}

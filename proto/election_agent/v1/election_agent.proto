@@ -52,11 +52,15 @@ message CampaignRequest {
   string candidate = 2;
   // the number of milliseconds for this election term
   int32 term = 3;
+  // the kind of election, useful for group elections. defaults to "default"
+  string kind = 4;
 }
 
 message CampaignResult {
   bool elected = 1;
   string leader = 2;
+  // the kind of election, useful for group elections. defaults to "default"
+  string kind = 3;
 }
 
 message ExtendElectedTermRequest {
@@ -66,10 +70,12 @@ message ExtendElectedTermRequest {
   string leader = 2;
   // the number of milliseconds for this election term
   int32 term = 3;
+  // the kind of election, useful for group elections. defaults to "default"
+  string kind = 4;
   // the number of retries, betwwen 0 ~ 10
-  int32 retries = 4;
+  int32 retries = 5;
   // the number of milliseconds between retries, between 0 ~ 1000ms
-  int32 retry_interval = 5;
+  int32 retry_interval = 6;
 }
 
 message ResignRequest {
@@ -77,10 +83,14 @@ message ResignRequest {
   string election = 1;
   // the leader name
   string leader = 2;
+  // the kind of election, useful for group elections. defaults to "default"
+  string kind = 3;
 }
 
 message GetLeaderRequest {
   string election = 1;
+  // the kind of election, useful for group elections. defaults to "default"
+  string kind = 2;
 }
 
 message GetPodsRequest {
