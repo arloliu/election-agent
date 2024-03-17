@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -59,4 +60,12 @@ func marshalJSON(v any) (string, error) {
 	}
 
 	return string(data), nil
+}
+
+func parseInt[T int | int32](s string) (T, error) {
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return T(n), nil
 }

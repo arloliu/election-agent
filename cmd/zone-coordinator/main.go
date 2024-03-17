@@ -37,10 +37,12 @@ func main() {
 	if portStr == "" {
 		portStr = "80"
 	}
-	port, err := strconv.Atoi(portStr)
+
+	n, err := strconv.ParseInt(portStr, 10, 32)
 	if err != nil {
 		logging.Fatalw("The `ZC_PORT` environment variable needs to be a number", "error", err)
 	}
+	port := int(n)
 
 	zone := os.Getenv("ZC_ZONE")
 	if zone == "" {

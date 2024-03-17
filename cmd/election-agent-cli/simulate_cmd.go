@@ -26,7 +26,7 @@ var (
 	numCandidates int
 	electionName  string
 	interval      int
-	term          int
+	electionTerm  int
 	simDuration   time.Duration
 	simState      string
 	leaderResign  bool
@@ -39,7 +39,7 @@ func init() {
 	simulateCmd.Flags().IntVarP(&numCandidates, "candidates", "c", 2, "number of candidates")
 	simulateCmd.Flags().StringVarP(&electionName, "election", "e", "sim_election", "election name")
 	simulateCmd.Flags().IntVarP(&interval, "interval", "i", 1000, "election interval, milliseconds")
-	simulateCmd.Flags().IntVarP(&term, "term", "t", 3000, "election term, milliseconds")
+	simulateCmd.Flags().IntVarP(&electionTerm, "term", "t", 3000, "election term, milliseconds")
 	simulateCmd.Flags().DurationVarP(&simDuration, "duration", "d", 10*time.Second, "simulation duration")
 	simulateCmd.Flags().StringVarP(&simState, "state", "s", agent.ActiveState, fmt.Sprintf("simulation state, possible values: %s", strings.Join(agent.ValidStates, ", ")))
 }
@@ -72,9 +72,9 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		"methodConfig": [{
 			"name": [{"service": "grpc.election_agent.v1.Control"}],
 			"waitForReady": true,
-			"timeout": "5s",
+			"timeout": "10s",
 			"retryPolicy": {
-				"maxAttempts": 5,
+				"maxAttempts": 10,
 				"initialBackoff": "0.1s",
 				"maxBackoff": "1s",
 				"backoffMultiplier": 2.0,
@@ -121,7 +121,7 @@ func campReqN(p int, n int) *eagrpc.CampaignRequest {
 	return &eagrpc.CampaignRequest{
 		Election:  fmt.Sprintf("%s-%d", electionName, p),
 		Candidate: fmt.Sprintf("client-%d-%d", p, n),
-		Term:      int32(term),
+		Term:      int32(electionTerm),
 	}
 }
 
@@ -129,7 +129,7 @@ func extendReqN(p int, n int) *eagrpc.ExtendElectedTermRequest {
 	return &eagrpc.ExtendElectedTermRequest{
 		Election: fmt.Sprintf("%s-%d", electionName, p),
 		Leader:   fmt.Sprintf("client-%d-%d", p, n),
-		Term:     int32(term),
+		Term:     int32(electionTerm),
 	}
 }
 

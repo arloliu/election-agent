@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/codes"
@@ -44,7 +43,7 @@ func campaign(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	term, err := strconv.Atoi(args[2])
+	term, err := parseInt[int32](args[2])
 	if err != nil {
 		reportError(err)
 	}
@@ -52,7 +51,7 @@ func campaign(cmd *cobra.Command, args []string) error {
 	req := &eagrpc.CampaignRequest{
 		Election:  args[0],
 		Candidate: args[1],
-		Term:      int32(term), //nolint:gosec
+		Term:      term,
 	}
 	result, err := client.Election.Campaign(ctx, req)
 	if err != nil {
@@ -84,7 +83,7 @@ func extendElectedTerm(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	term, err := strconv.Atoi(args[2])
+	term, err := parseInt[int32](args[3])
 	if err != nil {
 		reportError(err)
 	}
@@ -92,25 +91,25 @@ func extendElectedTerm(cmd *cobra.Command, args []string) error {
 	var retries int32 = 0
 	var retry_interval int32 = 0
 	if len(args) >= 4 {
-		n, err := strconv.Atoi(args[3])
+		var err error
+		retries, err = parseInt[int32](args[3])
 		if err != nil {
 			reportError(err)
 		}
-		retries = int32(n) //nolint:gosec
 	}
 
 	if len(args) >= 5 {
-		n, err := strconv.Atoi(args[4])
+		var err error
+		retry_interval, err = parseInt[int32](args[4])
 		if err != nil {
 			reportError(err)
 		}
-		retry_interval = int32(n) //nolint:gosec
 	}
 
 	req := &eagrpc.ExtendElectedTermRequest{
 		Election:      args[0],
 		Leader:        args[1],
-		Term:          int32(term), //nolint:gosec
+		Term:          term,
 		Retries:       retries,
 		RetryInterval: retry_interval,
 	}
