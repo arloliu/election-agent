@@ -2,11 +2,13 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
+	yaml "sigs.k8s.io/yaml/goyaml.v2"
 )
 
 // Config is the global configuration for application.
@@ -28,12 +30,12 @@ type Config struct {
 	// The lease key will be formatted as `[cfg.KeyPrefix]/lease/<lease name>`.
 	// The agent info key will be formatted as `[cfg.KeyPrefix]/info/[cfg.Name]/<field name>`.
 	// Defaults to `ela`.
-	KeyPrefix string `default:"ela" yaml:"key_prefix"`
+	KeyPrefix string `default:"ela" split_words:"true" yaml:"key_prefix"`
 
 	// The default state. Set this field in each agent for active-active or active-standby mode
 	// Defaults to `active`
 	// Possible values: `active`, `standby`, `unavailable`
-	DefaultState string `default:"active" yaml:"default_state"`
+	DefaultState string `default:"active" split_words:"true" yaml:"default_state"`
 	// The state cache TTL, set it to zero for disabling state cache.
 	// The state cache will be expired when zone health checker doesn't update state for `StateCacheTTL` duration.
 	// Defaults to `30s`.
@@ -93,7 +95,7 @@ type RedisConfig struct {
 	// Primary specifies which one is the primary Redis server in the "URLS" field.
 	// The primary redis server is the only redis server used by the agent when it enters orphan(standalone) mode.
 	// Defaults to `0`.
-	Primary int `default:"0" yaml:"primary_index"`
+	Primary int `default:"0" yaml:"primary"`
 
 	// Timeout of whole multiple redis node operations.
 	// Defaults to `3s`
@@ -145,12 +147,35 @@ type ZoneConfig struct {
 
 var Default *Config
 
+func loadYAMLConfig(cfg *Config) error {
+	yamlFilePath := os.Getenv("EA_CONFIG_FILE")
+	if yamlFilePath == "" {
+		return nil
+	}
+
+	if _, err := os.Stat(yamlFilePath); err != nil {
+		return fmt.Errorf("The config yaml file '%s' doesn't exist", yamlFilePath)
+	}
+
+	data, err := os.ReadFile(yamlFilePath)
+	if err != nil {
+		return fmt.Errorf("Failed to read config yaml file '%s', error:%w", yamlFilePath, err)
+	}
+
+	return yaml.Unmarshal(data, cfg)
+}
+
 func Init() error {
 	// TODO: support reading config from YAML file
 
 	_ = godotenv.Load()
 	var cfg Config
 	if err := envconfig.Process("EA", &cfg); err != nil {
+		return err
+	}
+
+	// The settings in the config file will override environment variables
+	if err := loadYAMLConfig(&cfg); err != nil {
 		return err
 	}
 
