@@ -193,10 +193,16 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 }
 
 func (rd *RedisKVDriver) LeaseID(name string, kind string, holder string, ttl time.Duration) uint64 {
+	if kind == "" {
+		kind = "default"
+	}
 	return rd.hasher.Hash(name + kind + holder + strconv.FormatInt(int64(ttl), 16))
 }
 
 func (rd *RedisKVDriver) GetHolder(ctx context.Context, name string, kind string) (string, error) {
+	if kind == "" {
+		kind = "default"
+	}
 	key := rd.leaseKey(name, kind)
 	ctx, cancel := context.WithTimeout(ctx, rd.cfg.Redis.OpearationTimeout)
 	defer cancel()
@@ -480,6 +486,9 @@ func (rd *RedisKVDriver) MSet(ctx context.Context, pairs ...any) (int, error) {
 }
 
 func (rd *RedisKVDriver) leaseKey(lease string, kind string) string {
+	if kind == "" {
+		kind = "default"
+	}
 	return rd.cfg.KeyPrefix + "/lease/" + kind + "/" + lease
 }
 
