@@ -41,9 +41,9 @@ type Config struct {
 	// Defaults to `30s`.
 	StateCacheTTL time.Duration `default:"0s" split_words:"true" yaml:"state_cache_ttl"`
 
-	Kube KubeConfing `yaml:"kube"` // K8S related settings.
-	GRPC GRPCConfig  `yaml:"grpc"` // gRPC service related settings.
-	HTTP HTTPConfig  `yaml:"http"` // HTTP service related settings.
+	Kube KubeConfig `yaml:"kube"` // K8S related settings.
+	GRPC GRPCConfig `yaml:"grpc"` // gRPC service related settings.
+	HTTP HTTPConfig `yaml:"http"` // HTTP service related settings.
 
 	Lease LeaseConfig `yaml:"lease"` // Lease related settings.
 
@@ -53,6 +53,7 @@ type Config struct {
 	// Defaults to `redis`.
 	Driver string `default:"redis" yaml:"driver"`
 	// Redis related settings, it only take effects when the driver is `redis`.
+	// Redis related settings, it only take effects when the driver is `redis`.
 	Redis RedisConfig `yaml:"redis"`
 }
 
@@ -61,7 +62,7 @@ func (cfg *Config) AgentInfoKey(field string) string {
 }
 
 // Kubernetes related settings
-type KubeConfing struct {
+type KubeConfig struct {
 	Enable bool `default:"true" yaml:"enable"` // Whether to enable k8s service. Defaults to `true`.
 	// InCluster indicates if the application is in or outside the k8s cluster. Defaults to `true`.
 	InCluster bool `default:"true" split_words:"true" yaml:"in_cluster"`

@@ -2,7 +2,7 @@ package e2etest
 
 import (
 	"context"
-	"math/rand/v2"
+	"math/rand"
 	"testing"
 
 	"election-agent/internal/agent"

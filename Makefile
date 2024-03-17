@@ -17,7 +17,6 @@ GOARCH      ?= $(shell go env GOARCH)
 GOPATH      ?= $(shell go env GOPATH)
 CGO_ENABLED ?= 0
 LDFLAGS ?= -ldflags="-s -w"
-LDFLAGS ?= -ldflags="-s -w"
 
 V ?= 0
 ifeq ($(V), 1)

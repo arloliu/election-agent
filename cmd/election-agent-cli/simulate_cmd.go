@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
@@ -84,7 +84,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 
 	for i := 0; i < numClients; i++ {
 		inst.peers[i] = make([]*electionCandidate, numCandidates)
-		activeIdx := rand.IntN(numCandidates)
+		activeIdx := rand.Intn(numCandidates) //nolint:gosec
 		for j := 0; j < numCandidates; j++ {
 			conn, err := grpc.DialContext(ctx, Hostname,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
