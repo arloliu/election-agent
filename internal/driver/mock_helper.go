@@ -35,6 +35,11 @@ func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
 	return driver
 }
 
+type mockMutexConn struct {
+	MockRedisConn
+	mu sync.Mutex
+}
+
 func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 	type cacheItem struct {
 		val    string
@@ -42,7 +47,7 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 		ttl    time.Duration
 	}
 
-	mockConn := &MockRedisConn{}
+	mockConn := &mockMutexConn{}
 	mockPool := &MockRedisPool{}
 
 	mockPool.On("Get", mock.Anything).Return(mockConn, nil)
@@ -53,6 +58,9 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 
 	mockConn.On("Get", mock.AnythingOfType("string")).
 		Return(func(name string) (string, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			v, ok := cache.Load(name)
 			if !ok {
 				return "", nil
@@ -68,12 +76,18 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 
 	mockConn.On("Set", mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(func(name string, value string) (bool, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			cache.Store(name, &cacheItem{val: value, ttl: 0})
 			return true, nil
 		})
 
 	mockConn.On("SetNX", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration")).
 		Return(func(name string, value string, expiry time.Duration) (bool, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			_, ok := cache.Load(name)
 			if ok {
 				return false, nil
@@ -85,6 +99,9 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 
 	mockConn.On("PTTL", mock.AnythingOfType("string")).
 		Return(func(name string) (time.Duration, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			v, ok := cache.Load(name)
 			if !ok {
 				return -2, nil
@@ -100,6 +117,9 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 
 	mockConn.On("Eval", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(func(script *redsyncredis.Script, keysAndArgs ...any) (any, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			keys := make([]string, script.KeyCount)
 			args := keysAndArgs
 			if script.KeyCount > 0 {
@@ -139,6 +159,9 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 
 	mockConn.On("MGet", mock.Anything).
 		Return(func(keys ...string) ([]string, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			vals := make([]string, len(keys))
 			for i, k := range keys {
 				v, ok := cache.Load(k)
@@ -161,6 +184,9 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 
 	mockConn.On("MSet", mock.Anything).
 		Return(func(pairs ...any) (bool, error) {
+			mockConn.mu.Lock()
+			defer mockConn.mu.Unlock()
+
 			for i := 0; i < len(pairs); i += 2 {
 				key, _ := pairs[i].(string)
 				var val string
