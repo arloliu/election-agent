@@ -271,14 +271,17 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 }
 
 func simulateClients(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), simDuration)
-	defer cancel()
-
+	var duration time.Duration
 	if leaderResign {
+		duration = 30 * time.Second
 		fmt.Printf("Resign all elections, clients: %d, candidates: %d\n", numClients, numCandidates)
 	} else {
-		fmt.Printf("Simulate %s state has started, clients: %d, candidates: %d, duration: %s\n", simState, numClients, numCandidates, simDuration.String())
+		duration = simDuration
+		fmt.Printf("Simulate %s state has started, clients: %d, candidates: %d, duration: %s\n", simState, numClients, numCandidates, duration.String())
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
 
 	clients, err := newSimulateClient(ctx)
 	if err != nil {
