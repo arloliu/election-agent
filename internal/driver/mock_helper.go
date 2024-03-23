@@ -11,24 +11,17 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"election-agent/internal/config"
-
-	"github.com/go-redsync/redsync/v4"
-	redsyncredis "github.com/go-redsync/redsync/v4/redis"
+	"election-agent/internal/driver/redlock"
 )
 
 func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
-	pools := []RedisPool{NewMockRedisPoolWithConn(), NewMockRedisPoolWithConn(), NewMockRedisPoolWithConn()}
-	redsyncPools := make([]redsyncredis.Pool, 0, len(pools))
-	for _, p := range pools {
-		redsyncPools = append(redsyncPools, redsyncredis.Pool(p))
-	}
+	conns := []redlock.Conn{NewMockRedlockConn(), NewMockRedlockConn(), NewMockRedlockConn()}
 	driver := &RedisKVDriver{
 		ctx:         context.TODO(),
 		cfg:         cfg,
-		originPools: pools,
-		pools:       pools,
-		quorum:      len(pools)/2 + 1,
-		rs:          redsync.New(redsyncPools...),
+		originConns: conns,
+		conns:       conns,
+		rlock:       redlock.New(conns...),
 		hasher:      maphash.NewHasher[string](),
 	}
 
@@ -36,11 +29,11 @@ func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
 }
 
 type mockMutexConn struct {
-	MockRedisConn
+	redlock.MockConn
 	mu sync.Mutex
 }
 
-func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
+func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 	type cacheItem struct {
 		val    string
 		active time.Time
@@ -48,11 +41,10 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 	}
 
 	mockConn := &mockMutexConn{}
-	mockPool := &MockRedisPool{}
-
-	mockPool.On("Get", mock.Anything).Return(mockConn, nil)
 
 	cache := sync.Map{}
+
+	mockConn.On("NewWithContext", mock.Anything).Return(mockConn)
 
 	mockConn.On("Close").Return(nil)
 
@@ -115,8 +107,8 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 			return time.Until(item.active.Add(item.ttl)), nil
 		})
 
-	mockConn.On("Eval", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(func(script *redsyncredis.Script, keysAndArgs ...any) (any, error) {
+	mockConn.On("Eval", mock.Anything, mock.Anything, mock.Anything).
+		Return(func(script *redlock.Script, keysAndArgs ...any) (any, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -194,12 +186,12 @@ func NewMockRedisPoolWithConn() *MockRedisPool { //nolint:cyclop
 				case string:
 					val = v
 				case bool:
-					val = boolStr(v)
+					val = redlock.BoolStr(v)
 				}
 				cache.Store(key, &cacheItem{val: val, ttl: 0})
 			}
 			return true, nil
 		})
 
-	return mockPool
+	return mockConn
 }

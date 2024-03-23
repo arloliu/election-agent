@@ -6,10 +6,9 @@ packages:
       inpackage: true
     interfaces:
       ZoneManager:
-  election-agent/internal/driver:
+  election-agent/internal/driver/redlock:
     config:
-      dir: internal/driver
+      dir: internal/driver/redlock
       inpackage: true
     interfaces:
-      RedisConn:
-      RedisPool:
+      Conn:

@@ -303,7 +303,7 @@ func (zm *zoneManager) SetOpearationMode(mode string) {
 }
 
 func (zm *zoneManager) GetZoomEnable() (bool, error) {
-	enable, err := zm.driver.GetSetBool(zm.ctx, zm.cfg.AgentInfoKey(agent.ZoneEnableKey), zm.cfg.Zone.Enable, false)
+	enable, err := zm.driver.GetSetBool(zm.ctx, zm.cfg.AgentInfoKey(agent.ZoneEnableKey), zm.cfg.Zone.Enable)
 	if err != nil {
 		return zm.cfg.Zone.Enable, err
 	}
@@ -311,7 +311,7 @@ func (zm *zoneManager) GetZoomEnable() (bool, error) {
 }
 
 func (zm *zoneManager) SetZoomEnable(enable bool) error {
-	_, err := zm.driver.SetBool(zm.ctx, zm.cfg.AgentInfoKey(agent.ZoneEnableKey), enable, false)
+	_, err := zm.driver.SetBool(zm.ctx, zm.cfg.AgentInfoKey(agent.ZoneEnableKey), enable)
 	zm.cfg.Zone.Enable = enable
 	return err
 }

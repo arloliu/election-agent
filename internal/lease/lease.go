@@ -15,16 +15,9 @@ type Lease interface {
 	Revoke(ctx context.Context) error
 	Extend(ctx context.Context) error
 }
-
-type Mutex interface {
-	Lock(ctx context.Context) error
-	Unlock(tx context.Context) (bool, error)
-}
-
 type KVDriver interface {
 	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
 	NewLease(name string, kind string, holder string, ttl time.Duration) Lease
-	NewMutex(name string, ttl time.Duration) Mutex
 	GetHolder(ctx context.Context, name string, kind string) (string, error)
 	Shutdown(ctx context.Context) error
 
@@ -46,15 +39,15 @@ type KVDriver interface {
 	// Ping checks the backend status
 	Ping(ctx context.Context) (int, error)
 	// Get the string value of key.
-	Get(ctx context.Context, key string, strict bool) (string, error)
+	Get(ctx context.Context, key string) (string, error)
 	// GetSetBool gets the boolean value of key, sets and returns defVal is the key doesn't exist.
-	GetSetBool(ctx context.Context, key string, defVal bool, strict bool) (bool, error)
+	GetSetBool(ctx context.Context, key string, defVal bool) (bool, error)
 	// MGet gets the string values of all specified keys
 	MGet(ctx context.Context, keys ...string) ([]string, error)
 	// Set the string value of key.
-	Set(ctx context.Context, key string, value string, strict bool) (int, error)
+	Set(ctx context.Context, key string, value string) (int, error)
 	// SetBool sets the boolean value of key.
-	SetBool(ctx context.Context, key string, value bool, strict bool) (int, error)
+	SetBool(ctx context.Context, key string, value bool) (int, error)
 	// MSet sets the given keys to their respective values
 	MSet(ctx context.Context, pairs ...any) (int, error)
 }

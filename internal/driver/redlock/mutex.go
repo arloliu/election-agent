@@ -1,0 +1,174 @@
+package redlock
+
+import (
+	"context"
+	"encoding/base64"
+	"math/rand"
+	"time"
+
+	cryptorand "crypto/rand"
+)
+
+const (
+	minRetryDelayMilliSec = 50
+	maxRetryDelayMilliSec = 250
+)
+
+type DelayFunc func(tries int) time.Duration
+
+var defDelayFun = func(tries int) time.Duration {
+	randDelay := rand.Intn(maxRetryDelayMilliSec - minRetryDelayMilliSec)
+	return time.Duration(randDelay+minRetryDelayMilliSec) * time.Millisecond
+}
+
+type Mutex struct {
+	name   string
+	expiry time.Duration
+
+	tries     int
+	delayFunc DelayFunc
+
+	driftFactor   float64
+	timeoutFactor float64
+
+	quorum int
+
+	value       string
+	randomValue bool
+	until       time.Time
+	shuffle     bool
+	failFast    bool
+
+	conns []Conn
+}
+
+// Name returns mutex name (i.e. the Redis key).
+func (m *Mutex) Name() string {
+	return m.name
+}
+
+// Value returns the current random value. The value will be empty until a lock is acquired (or WithValue option is used).
+func (m *Mutex) Value() string {
+	return m.value
+}
+
+// Until returns the time of validity of acquired lock. The value will be zero value until a lock is acquired.
+func (m *Mutex) Until() time.Time {
+	return m.until
+}
+
+// TryLockContext only attempts to lock m once and returns immediately regardless of success or failure without retrying.
+func (m *Mutex) TryLockContext(ctx context.Context) error {
+	return m.lockContext(ctx, 1)
+}
+
+// LockContext locks m. In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
+func (m *Mutex) LockContext(ctx context.Context) error {
+	return m.lockContext(ctx, m.tries)
+}
+
+// lockContext locks m. In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
+func (m *Mutex) lockContext(ctx context.Context, tries int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var err error
+	var value string
+
+	if m.randomValue {
+		value, err = genValue()
+		if err != nil {
+			return err
+		}
+	} else {
+		value = m.value
+	}
+
+	var timer *time.Timer
+	for i := 0; i < tries; i++ {
+		if i != 0 {
+			if timer == nil {
+				timer = time.NewTimer(m.delayFunc(i))
+			} else {
+				timer.Reset(m.delayFunc(i))
+			}
+
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				// Exit early if the context is done.
+				return ErrFailed
+			case <-timer.C:
+				// Fall-through when the delay timer completes.
+			}
+		}
+
+		start := time.Now()
+
+		n, err := func() (int, error) {
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(int64(float64(m.expiry)*m.timeoutFactor)))
+			defer cancel()
+			return actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+				return m.acquire(ctx, conn, value)
+			})
+		}()
+
+		now := time.Now()
+		until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
+		if n >= m.quorum && now.Before(until) {
+			m.value = value
+			m.until = until
+			return nil
+		}
+		// _, _ = func() (int, error) {
+		// 	ctx, cancel := context.WithTimeout(ctx, time.Duration(int64(float64(m.expiry)*m.timeoutFactor)))
+		// 	defer cancel()
+		// 	return actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+		// 		return m.release(ctx, conn, value)
+		// 	})
+		// }()
+		if i == tries-1 && err != nil {
+			return err
+		}
+	}
+
+	return ErrFailed
+}
+
+// UnlockContext unlocks m and returns the status of unlock.
+func (m *Mutex) UnlockContext(ctx context.Context) (bool, error) {
+	n, err := actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+		return m.release(ctx, conn, m.value)
+	})
+	if n < m.quorum {
+		return false, err
+	}
+	return true, nil
+}
+
+// ExtendContext resets the mutex's expiry and returns the status of expiry extension.
+func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
+	start := time.Now()
+	n, err := actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+		return m.touch(ctx, conn, m.value, int(m.expiry/time.Millisecond))
+	})
+	if n < m.quorum {
+		return false, err
+	}
+	now := time.Now()
+	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
+	if now.Before(until) {
+		m.until = until
+		return true, nil
+	}
+	return false, ErrExtendFailed
+}
+
+func genValue() (string, error) {
+	b := make([]byte, 16)
+	_, err := cryptorand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}

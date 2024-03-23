@@ -101,6 +101,10 @@ func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind st
 }
 
 func (lm *LeaseManager) GetState() string {
+	if !lm.cfg.Zone.Enable {
+		return agent.ActiveState
+	}
+
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 

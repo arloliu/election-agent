@@ -6,13 +6,14 @@ require (
 	github.com/KimMachineGun/automemlimit v0.5.0
 	github.com/dolthub/maphash v0.1.0
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-redsync/redsync/v4 v4.12.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/joho/godotenv v1.5.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/redis/go-redis/v9 v9.4.0
+	github.com/redis/rueidis v1.0.32
+	github.com/redis/rueidis/rueidiscompat v1.0.32
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	github.com/thessem/zap-prettyconsole v0.3.0

@@ -226,20 +226,32 @@ subjects:
 
 
 ### Resource Allocation Recommendation
+Test condition: 3000 concurrent clients, 3 Redis nodes.
+
 Performance depends on the number of CPU cores, but performance improvement is not linearly related to CPU cores. The follow table lists the request-per-seconds by CPU cores.
 
-> Allocate `0.5 ~ 1 vCPU` for a pod is a cost-effetive choice when deploying election agents with multiple replicas.
+> Allocate `1~2 vCPU` for a pod is a cost-effetive choice when deploying election agents with multiple replicas.
+
+**go-redis verion**
 
 | CPU Cores | RPS   | Perf. | DIff(prev). |
 |-----------|-------|-------|-------------|
-| 1         | 11064 | 100%  | 0%          |
-| 2         | 17765 | 160%  | +60%        |
-| 3         | 21074 | 190%  | +21%        |
-| 4         | 22670 | 205%  | +15%        |
-| 5         | 23866 | 216%  | +11%        |
-| 6         | 24313 | 220%  | +4%         |
-| 7         | 24783 | 223%  | +3%         |
-| 8         | 24925 | 225%  | +2*         |
+| 1         | 11535 | 100%  | 0%          |
+| 2         | 19958 | 173%  | +73%        |
+| 3         | 24844 | 215%  | +42%        |
+| 4         | 26904 | 233%  | +18%        |
+| 5         | 27337 | 236%  | +3%         |
+| 6         | 27453 | 238%  | +2%         |
+
+**rueidis verion**
+| CPU Cores | RPS   | Perf. | DIff(prev). | Compare to go-redis |
+|-----------|-------|-------|-------------|---------------------|
+| 1         | 14001 | 100%  | 0%          | +21%                |
+| 2         | 25552 | 182%  | +82%        | +28%                |
+| 3         | 36598 | 261%  | +79%        | +47%                |
+| 4         | 42735 | 305%  | +44%        | +59%                |
+| 5         | 48741 | 348%  | +43%        | +78%                |
+| 6         | 51254 | 366%  | +18         | +85%                |
 
 For optimal performance, the following table lists recommended memory allocations in a pod for different numbers of concurrent clients.
 | Clients | Recommended Memory |
@@ -248,6 +260,7 @@ For optimal performance, the following table lists recommended memory allocation
 | 2000    | 400 MiB            |
 | 3000    | 600 MiB            |
 | 6000    | 1200 MiB           |
+
 
 Example:
 If the system expects to serve 6000 concurrent clients, and creates a service with 3 election agent replicas. It means one replica needs to serve ~2000 concurrent clients.
