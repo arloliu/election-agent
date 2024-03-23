@@ -77,7 +77,7 @@ func newBenchmarkClient(ctx context.Context, host string, n int) *httpBenchmarkC
 	}
 
 	for i := 0; i < n; i++ {
-		client.reqURLs[i] = fmt.Sprintf("%s/election/bench_election%d", host, i)
+		client.reqURLs[i] = fmt.Sprintf("%s/election/test/bench_election%d", host, i)
 		client.creqs1[i] = []byte(fmt.Sprintf(`{"candidate":"bench_client%d","term":%d}`, i, bench.BenchmarkTTL))
 		client.creqs2[i] = []byte(fmt.Sprintf(`{"candidate":"bench_client%d_other","term":%d}`, i, bench.BenchmarkTTL))
 		client.ereqs[i] = []byte(fmt.Sprintf(`{"leader":"bench_client%d","term":%d}`, i, bench.BenchmarkTTL))
