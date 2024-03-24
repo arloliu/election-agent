@@ -160,7 +160,7 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 			logging.Warn("Initial key-value driver in unavailable state")
 		}
 	} else {
-		inst.SetAgentStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode})
+		_ = inst.SetAgentStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode})
 	}
 
 	return inst, err
@@ -199,6 +199,7 @@ func (rd *RedisKVDriver) NewLease(name string, kind string, holder string, ttl t
 			redlock.WithExpiry(ttl),
 			redlock.WithTries(1),
 			redlock.WithTimeoutFactor(0.2),
+			redlock.WithShuffleConns(true),
 		),
 		driver: rd,
 	}

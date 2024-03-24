@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	time "time"
 
@@ -38,6 +39,14 @@ func (r *RedLock) NewMutex(name string, value string, options ...Option) *Mutex 
 		opt.Apply(mutex)
 	}
 
+	if mutex.shuffle {
+		clonedConns := make([]Conn, len(r.conns))
+		_ = copy(clonedConns, r.conns)
+		rand.Shuffle(len(clonedConns), func(i, j int) {
+			clonedConns[i], clonedConns[j] = clonedConns[j], clonedConns[i]
+		})
+		mutex.conns = clonedConns
+	}
 	return mutex
 }
 
@@ -136,10 +145,11 @@ func (r *RedLock) MGet(ctx context.Context, keys ...string) ([]string, error) {
 
 	vals := make([]string, len(keys))
 	for i, reply := range replies {
-		var n int
-		vals[i], n = getMostFreqVal(reply)
+		val, n := getMostFreqVal(reply)
 		if n < r.quorum {
-			return []string{}, fmt.Errorf("Get fails, the number of the same (%s:%s) is %d < %d quorum, error: %w", keys[i], vals[i], n, r.quorum, err)
+			vals[i] = ""
+		} else {
+			vals[i] = val
 		}
 	}
 
@@ -319,6 +329,13 @@ func WithDriftFactor(factor float64) Option {
 func WithTimeoutFactor(factor float64) Option {
 	return OptionFunc(func(m *Mutex) {
 		m.timeoutFactor = factor
+	})
+}
+
+// WithShuffleConns can be used to shuffle Redis connections to reduce centralized access in concurrent scenarios.
+func WithShuffleConns(b bool) Option {
+	return OptionFunc(func(m *Mutex) {
+		m.shuffle = b
 	})
 }
 

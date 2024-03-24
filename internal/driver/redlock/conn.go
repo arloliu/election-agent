@@ -2,7 +2,7 @@ package redlock
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec
 	"encoding/hex"
 	"io"
 	"time"
