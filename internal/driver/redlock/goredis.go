@@ -1,4 +1,4 @@
-//go:build goredis
+//go:build goredis || !rueidis
 
 package redlock
 
