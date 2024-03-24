@@ -63,7 +63,6 @@ func (c *rueidisConn) NewWithContext(ctx context.Context) Conn {
 
 func (c *rueidisConn) Get(name string) (string, error) {
 	value, err := c.delegate.Get(c.ctx, name).Result()
-	logging.Debugw("(c *rueidisConn) Get", "value", value, "err", err)
 	return value, noErrNil(err)
 }
 

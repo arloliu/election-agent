@@ -6,8 +6,6 @@ import (
 	"math/rand"
 	"time"
 
-	"election-agent/internal/logging"
-
 	cryptorand "crypto/rand"
 )
 
@@ -169,7 +167,6 @@ func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error
 		return false, err
 	}
 
-	logging.Debugw("HandoverContext", "holder", holder, "n", n, "err", err)
 	now := time.Now()
 	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
 	if now.Before(until) {
