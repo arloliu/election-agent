@@ -11,10 +11,13 @@ import (
 
 type Lease interface {
 	ID() uint64
+	Kind() string
 	Grant(ctx context.Context) error
 	Revoke(ctx context.Context) error
 	Extend(ctx context.Context) error
+	Handover(ctx context.Context, holder string) error
 }
+
 type KVDriver interface {
 	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
 	NewLease(name string, kind string, holder string, ttl time.Duration) Lease
@@ -85,6 +88,16 @@ func (e ExtendFailError) Error() string {
 	return fmt.Errorf("Failed to extend lease %s, got error: %w", e.Lease, e.Err).Error()
 }
 
+type HandoverFailError struct {
+	Lease  string
+	Holder string
+	Err    error
+}
+
+func (e HandoverFailError) Error() string {
+	return fmt.Errorf("Failed to handover lease %s to %s, got error: %w", e.Lease, e.Holder, e.Err).Error()
+}
+
 func IsUnavailableError(err error) bool {
 	uerr := &UnavailableError{}
 	return errors.As(err, &uerr)
@@ -102,6 +115,11 @@ func IsNonexistError(err error) bool {
 
 func IsExtendFailError(err error) bool {
 	uerr := &ExtendFailError{}
+	return errors.As(err, &uerr)
+}
+
+func IsHandoverFailError(err error) bool {
+	uerr := &HandoverFailError{}
 	return errors.As(err, &uerr)
 }
 

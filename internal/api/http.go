@@ -35,6 +35,7 @@ func (s *ElectionHTTPService) MountHandlers(router *gin.Engine) {
 	router.GET("/election/:kind/:name", s.getLeader)
 	router.POST("/election/:kind/:name", s.campaign)
 	router.PATCH("/election/:kind/:name", s.extendElectedTerm)
+	router.PUT("/election/:kind/:name", s.handover)
 	router.DELETE("/election/:kind/:name", s.resign)
 
 	// k8s related endpointes
@@ -64,6 +65,11 @@ type ExtendElectedTermRequest struct {
 	Term          int32  `json:"term" binding:"required,gte=1000"`
 	Retries       int32  `json:"retries" binding:"gte=0,lte=10"`
 	RetryInterval int32  `json:"retry_interval" binding:"gte=0,lte=1000"`
+}
+
+type HandoverRequest struct {
+	Leader string `json:"leader" binding:"required"`
+	Term   int32  `json:"term" binding:"required,gte=1000"`
 }
 
 type ResignRequest struct {
@@ -107,16 +113,16 @@ func (s *ElectionHTTPService) campaign(c *gin.Context) {
 		return
 	}
 
-	err := s.leaseMgr.GrantLease(s.ctx, election, kind, body.Candidate, time.Duration(body.Term)*time.Millisecond)
+	result, err := s.leaseMgr.GrantLease(s.ctx, election, kind, body.Candidate, time.Duration(body.Term)*time.Millisecond)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"elected": false, "leader": ""})
+		c.JSON(http.StatusOK, gin.H{"elected": false, "leader": result.Holder, "kind": result.Kind})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"elected": true, "leader": body.Candidate})
+	c.JSON(http.StatusOK, gin.H{"elected": true, "leader": result.Holder, "kind": result.Kind})
 }
 
 // PATCH handler for /election/:kind/:name, extend the elected term of the election
@@ -146,15 +152,46 @@ func (s *ElectionHTTPService) extendElectedTerm(c *gin.Context) {
 	}
 
 	if err != nil {
+		if lease.IsUnavailableError(err) { //nolint:gocritic
+			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
+		} else if lease.IsTakenError(err) {
+			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"message": err.Error()})
+		} else if lease.IsNonexistError(err) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		} else {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		}
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+// PUT handler for /election/:kind/:name, handover
+func (s *ElectionHTTPService) handover(c *gin.Context) {
+	election := c.Param("name")
+	if election == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "the election name is empty"})
+		return
+	}
+	kind := c.Param("kind")
+
+	var body HandoverRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	err := s.leaseMgr.HandoverLease(s.ctx, election, kind, body.Leader, time.Duration(body.Term)*time.Millisecond)
+	if err != nil {
 		if lease.IsUnavailableError(err) {
 			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
 		} else if lease.IsTakenError(err) {
-			c.JSON(http.StatusConflict, gin.H{"message": err.Error()})
-		} else if lease.IsNonexistError(err) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"message": err.Error()})
+		} else {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		}
 
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 

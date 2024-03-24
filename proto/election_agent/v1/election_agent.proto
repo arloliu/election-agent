@@ -87,6 +87,17 @@ message ResignRequest {
   string kind = 3;
 }
 
+message HandoverRequest {
+  // the election name
+  string election = 1;
+  // the new leader name
+  string leader = 2;
+  // the number of milliseconds for this election term
+  int32 term = 3;
+  // the kind of election, useful for group elections. defaults to "default"
+  string kind = 4;
+}
+
 message GetLeaderRequest {
   string election = 1;
   // the kind of election, useful for group elections. defaults to "default"
@@ -102,6 +113,7 @@ service Election {
   rpc Campaign(CampaignRequest) returns (CampaignResult);
   rpc ExtendElectedTerm(ExtendElectedTermRequest) returns (BoolValue);
   rpc Resign(ResignRequest) returns (BoolValue);
+  rpc Handover(HandoverRequest) returns (BoolValue);
   rpc GetLeader(GetLeaderRequest) returns (StringValue);
   rpc GetPods(GetPodsRequest) returns (Pods);
 }

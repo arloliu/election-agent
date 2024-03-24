@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"time"
 
+	"election-agent/internal/logging"
+
 	cryptorand "crypto/rand"
 )
 
@@ -17,7 +19,7 @@ const (
 type DelayFunc func(tries int) time.Duration
 
 var defDelayFun = func(tries int) time.Duration {
-	randDelay := rand.Intn(maxRetryDelayMilliSec - minRetryDelayMilliSec)
+	randDelay := rand.Intn(maxRetryDelayMilliSec - minRetryDelayMilliSec) //nolint:gosec
 	return time.Duration(randDelay+minRetryDelayMilliSec) * time.Millisecond
 }
 
@@ -37,7 +39,6 @@ type Mutex struct {
 	randomValue bool
 	until       time.Time
 	shuffle     bool
-	failFast    bool
 
 	conns []Conn
 }
@@ -120,13 +121,7 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 			m.until = until
 			return nil
 		}
-		// _, _ = func() (int, error) {
-		// 	ctx, cancel := context.WithTimeout(ctx, time.Duration(int64(float64(m.expiry)*m.timeoutFactor)))
-		// 	defer cancel()
-		// 	return actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
-		// 		return m.release(ctx, conn, value)
-		// 	})
-		// }()
+
 		if i == tries-1 && err != nil {
 			return err
 		}
@@ -162,6 +157,26 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	return false, ErrExtendFailed
+}
+
+// HandoverContext set a new holder of mutex and return the status.
+func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error) {
+	start := time.Now()
+	n, err := actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+		return m.handover(ctx, conn, holder, int(m.expiry/time.Millisecond))
+	})
+	if n < m.quorum {
+		return false, err
+	}
+
+	logging.Debugw("HandoverContext", "holder", holder, "n", n, "err", err)
+	now := time.Now()
+	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
+	if now.Before(until) {
+		m.until = until
+		return true, nil
+	}
+	return false, ErrHandoverFailed
 }
 
 func genValue() (string, error) {

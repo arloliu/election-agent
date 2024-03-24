@@ -40,15 +40,17 @@ func (s *ElectionGRPCService) Campaign(ctx context.Context, req *pb.CampaignRequ
 		return &pb.CampaignResult{}, status.Errorf(codes.InvalidArgument, "The field 'term' must >= 1000")
 	}
 
-	err := s.leaseMgr.GrantLease(ctx, req.Election, req.Kind, req.Candidate, time.Duration(int64(req.Term)*int64(time.Millisecond)))
+	result, err := s.leaseMgr.GrantLease(ctx, req.Election, req.Kind, req.Candidate, time.Duration(int64(req.Term)*int64(time.Millisecond)))
+	campResult := &pb.CampaignResult{Elected: false, Leader: result.Holder, Kind: result.Kind}
 	if err != nil {
 		if lease.IsUnavailableError(err) {
-			return &pb.CampaignResult{}, status.Error(codes.FailedPrecondition, err.Error())
+			return campResult, status.Error(codes.FailedPrecondition, err.Error())
 		}
-		return &pb.CampaignResult{Elected: false, Leader: err.Error()}, nil
+		return campResult, nil
 	}
 
-	return &pb.CampaignResult{Elected: true, Leader: req.Candidate}, nil
+	campResult.Elected = true
+	return campResult, nil
 }
 
 func (s *ElectionGRPCService) ExtendElectedTerm(ctx context.Context, req *pb.ExtendElectedTermRequest) (*pb.BoolValue, error) {
@@ -109,6 +111,28 @@ func (s *ElectionGRPCService) Resign(ctx context.Context, req *pb.ResignRequest)
 			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
+	}
+
+	return &pb.BoolValue{Value: true}, nil
+}
+
+func (s *ElectionGRPCService) Handover(ctx context.Context, req *pb.HandoverRequest) (*pb.BoolValue, error) {
+	if req.Election == "" {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "Empty field 'election'")
+	}
+	if req.Leader == "" {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "Empty field 'leader'")
+	}
+	if req.Term < 1000 {
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, "The field 'term' must >= 1000")
+	}
+
+	err := s.leaseMgr.HandoverLease(ctx, req.Election, req.Kind, req.Leader, time.Duration(req.Term)*time.Millisecond)
+	if err != nil {
+		if lease.IsUnavailableError(err) {
+			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
+		}
+		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unknown, err.Error())
 	}
 
 	return &pb.BoolValue{Value: true}, nil

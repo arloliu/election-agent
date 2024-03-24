@@ -67,42 +67,11 @@ func (r *RedLock) Get(ctx context.Context, key string) (string, error) {
 		return "", errors.New("The redis key is empty")
 	}
 
-	type result struct {
-		reply string
-		err   error
-	}
+	_, val, err := actStringOpAsync(r.conns, r.quorum, func(conn Conn) (string, error) {
+		return conn.NewWithContext(ctx).Get(key)
+	})
 
-	connSize := len(r.conns)
-
-	ch := make(chan result, connSize)
-	for _, conn := range r.conns {
-		go func(conn Conn) {
-			r := result{}
-			r.reply, r.err = conn.NewWithContext(ctx).Get(key)
-			ch <- r
-		}(conn)
-	}
-
-	n := 0
-	replies := make([]string, 0, connSize)
-	var err error
-
-	for i := 0; i < connSize; i++ {
-		r := <-ch
-		if r.err == nil {
-			replies = append(replies, r.reply)
-			n++
-		} else if r.err != nil {
-			err = multierror.Append(err, r.err)
-		}
-	}
-
-	val, n := getMostFreqVal[string](replies)
-	if n < r.quorum {
-		return val, fmt.Errorf("Get fails, the number of the same (%s:%s) is %d < %d quorum, error: %w", key, val, n, r.quorum, err)
-	}
-
-	return val, nil
+	return val, err
 }
 
 func (r *RedLock) Set(ctx context.Context, key string, value string) (int, error) {
@@ -188,6 +157,47 @@ func (r *RedLock) MSet(ctx context.Context, pairs ...any) (int, error) {
 	return actStatusOpAsync(r.conns, r.quorum, func(conn Conn) (bool, error) {
 		return conn.NewWithContext(ctx).MSet(pairs...)
 	})
+}
+
+type stringFunc func(conn Conn) (string, error)
+
+func actStringOpAsync(conns []Conn, quorum int, actFunc stringFunc) (int, string, error) {
+	type result struct {
+		reply string
+		err   error
+	}
+
+	connSize := len(conns)
+
+	ch := make(chan result, connSize)
+	for _, conn := range conns {
+		go func(conn Conn) {
+			r := result{}
+			r.reply, r.err = actFunc(conn)
+			ch <- r
+		}(conn)
+	}
+
+	n := 0
+	replies := make([]string, 0, connSize)
+	var err error
+
+	for i := 0; i < connSize; i++ {
+		r := <-ch
+		if r.err == nil {
+			replies = append(replies, r.reply)
+			n++
+		} else if r.err != nil {
+			err = multierror.Append(err, r.err)
+		}
+	}
+
+	val, n := getMostFreqVal[string](replies)
+	if n < quorum {
+		return n, val, fmt.Errorf("Get fails, the number of the same value:%s is %d < %d quorum, error: %w", val, n, quorum, err)
+	}
+
+	return n, val, nil
 }
 
 type statusFunc func(conn Conn) (bool, error)

@@ -4,11 +4,12 @@ package redlock
 
 import (
 	"context"
-	"election-agent/internal/config"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"election-agent/internal/config"
 
 	"github.com/redis/go-redis/v9"
 )

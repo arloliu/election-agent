@@ -130,22 +130,22 @@ func verifyConfig(t *testing.T) {
 	require.Equal("standby", cfg.DefaultState)
 	require.Equal(time.Second, cfg.StateCacheTTL)
 
-	require.Equal(false, cfg.Kube.Enable)
-	require.Equal(false, cfg.Kube.InCluster)
+	require.False(cfg.Kube.Enable)
+	require.False(cfg.Kube.InCluster)
 
-	require.Equal(false, cfg.GRPC.Enable)
+	require.False(cfg.GRPC.Enable)
 	require.Equal(1234, cfg.GRPC.Port)
 
-	require.Equal(false, cfg.HTTP.Enable)
+	require.False(cfg.HTTP.Enable)
 	require.Equal(2345, cfg.HTTP.Port)
 
 	require.Equal("cluster", cfg.Redis.Mode)
 	require.Equal([]string{"redis://c1r1?addr=c1r2&addr=c1r3", "redis://c2r1?addr=c2r2&addr=c2r3", "redis://c3r1?addr=c3r2&addr=c3r3"}, cfg.Redis.URLs)
 
-	require.Equal(true, cfg.Lease.Cache)
+	require.True(cfg.Lease.Cache)
 	require.Equal(1234, cfg.Lease.CacheSize)
 
-	require.Equal(true, cfg.Zone.Enable)
+	require.True(cfg.Zone.Enable)
 	require.Equal("zone1", cfg.Zone.Name)
 	require.Equal("test", cfg.Zone.StateKeyPrefix)
 	require.Equal(time.Second, cfg.Zone.CheckInterval)

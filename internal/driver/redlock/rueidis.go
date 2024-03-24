@@ -1,16 +1,15 @@
-////go:build rueidis
+//go:build rueidis
 
 package redlock
 
 import (
 	"context"
+	"election-agent/internal/config"
+	"election-agent/internal/logging"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
-
-	"election-agent/internal/config"
-	"election-agent/internal/logging"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/rueidis"

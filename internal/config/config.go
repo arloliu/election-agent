@@ -126,8 +126,8 @@ type ZoneConfig struct {
 	StateKeyPrefix string `default:"ela_state" split_words:"true" yaml:"state_key_prefix"`
 
 	// The zone health check interval.
-	// Defaults to `10s`.
-	CheckInterval time.Duration `default:"10s" split_words:"true" yaml:"check_interval"`
+	// Defaults to `1s`.
+	CheckInterval time.Duration `default:"1s" split_words:"true" yaml:"check_interval"`
 
 	// The execution timeout of zone health check.
 	// Defaults to `3s`.

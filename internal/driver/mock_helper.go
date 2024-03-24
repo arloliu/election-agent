@@ -30,7 +30,8 @@ func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
 
 type mockMutexConn struct {
 	redlock.MockConn
-	mu sync.Mutex
+	mu    sync.Mutex
+	cache sync.Map
 }
 
 func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
@@ -42,8 +43,6 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 
 	mockConn := &mockMutexConn{}
 
-	cache := sync.Map{}
-
 	mockConn.On("NewWithContext", mock.Anything).Return(mockConn)
 
 	mockConn.On("Close").Return(nil)
@@ -53,13 +52,14 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
-			v, ok := cache.Load(name)
+			v, ok := mockConn.cache.Load(name)
 			if !ok {
 				return "", nil
 			}
 			item, ok := v.(*cacheItem)
+
 			if !ok || (item.ttl > 0 && time.Since(item.active) > item.ttl) {
-				cache.Delete(name)
+				mockConn.cache.Delete(name)
 				return "", nil
 			}
 
@@ -71,7 +71,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
-			cache.Store(name, &cacheItem{val: value, ttl: 0})
+			mockConn.cache.Store(name, &cacheItem{val: value, ttl: 0})
 			return true, nil
 		})
 
@@ -80,12 +80,12 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
-			_, ok := cache.Load(name)
+			_, ok := mockConn.cache.Load(name)
 			if ok {
 				return false, nil
 			}
 
-			cache.Store(name, &cacheItem{val: value, ttl: expiry})
+			mockConn.cache.Store(name, &cacheItem{val: value, ttl: expiry})
 			return true, nil
 		})
 
@@ -94,7 +94,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
-			v, ok := cache.Load(name)
+			v, ok := mockConn.cache.Load(name)
 			if !ok {
 				return -2, nil
 			}
@@ -102,7 +102,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			if item.ttl == 0 {
 				return -1, nil
 			} else if item.ttl > 0 && time.Since(item.active) > item.ttl {
-				cache.Delete(name)
+				mockConn.cache.Delete(name)
 			}
 			return time.Until(item.active.Add(item.ttl)), nil
 		})
@@ -121,29 +121,46 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 				args = keysAndArgs[script.KeyCount:]
 			}
 
-			if strings.Contains(script.Src, "DEL") {
-				v, ok := cache.Load(keys[0])
+			if strings.Contains(script.Src, "-- delete") {
+				v, ok := mockConn.cache.Load(keys[0])
 				if !ok {
-					return 0, nil
+					return int64(0), nil
 				}
+
 				item, _ := v.(*cacheItem)
 				if item.val != args[0].(string) {
-					return 0, nil
+					return int64(0), nil
 				}
-				cache.Delete(keys[0])
-				return 1, nil
-			} else if strings.Contains(script.Src, "PEXPIRE") {
-				v, ok := cache.Load(keys[0])
-				if !ok {
-					return 0, nil
+
+				mockConn.cache.Delete(keys[0])
+				return int64(1), nil
+			} else if strings.Contains(script.Src, "-- acquire") || strings.Contains(script.Src, "-- touch") { // acquire or touch
+				if v, ok := mockConn.cache.Load(keys[0]); ok {
+					item, _ := v.(*cacheItem)
+					if item.val != args[0].(string) {
+						return int64(0), nil
+					}
+
+					item.ttl = time.Duration(int64(args[1].(int)) * int64(time.Millisecond))
+					item.active = time.Now()
+					return int64(1), nil
+				} else {
+					item := &cacheItem{
+						val:    args[0].(string),
+						ttl:    time.Duration(int64(args[1].(int)) * int64(time.Millisecond)),
+						active: time.Now(),
+					}
+					mockConn.cache.Store(keys[0], item)
+					return int64(1), nil
 				}
-				item, _ := v.(*cacheItem)
-				if item.val != args[0].(string) {
-					return 0, nil
+			} else if strings.Contains(script.Src, "-- handover") {
+				item := &cacheItem{
+					val:    args[0].(string),
+					ttl:    time.Duration(int64(args[1].(int)) * int64(time.Millisecond)),
+					active: time.Now(),
 				}
-				item.ttl = time.Duration(int64(args[1].(int)) * int64(time.Millisecond))
-				item.active = time.Now()
-				return 1, nil
+				mockConn.cache.Store(keys[0], item)
+				return "OK", nil
 			}
 
 			return nil, errors.New("no script")
@@ -156,7 +173,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 
 			vals := make([]string, len(keys))
 			for i, k := range keys {
-				v, ok := cache.Load(k)
+				v, ok := mockConn.cache.Load(k)
 				if !ok {
 					vals[i] = ""
 					continue
@@ -164,7 +181,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 
 				item, ok := v.(*cacheItem)
 				if !ok || (item.ttl > 0 && time.Since(item.active) > item.ttl) {
-					cache.Delete(k)
+					mockConn.cache.Delete(k)
 					vals[i] = ""
 					continue
 				}
@@ -188,7 +205,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 				case bool:
 					val = redlock.BoolStr(v)
 				}
-				cache.Store(key, &cacheItem{val: val, ttl: 0})
+				mockConn.cache.Store(key, &cacheItem{val: val, ttl: 0})
 			}
 			return true, nil
 		})

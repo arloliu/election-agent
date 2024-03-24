@@ -52,16 +52,22 @@ func TestGRPCService(t *testing.T) {
 	cReq2 := &eagrpc.CampaignRequest{Election: "election1", Candidate: "client2", Term: 4000}
 	campaignResult, err := client.Campaign(ctx, cReq1)
 	require.NoError(err)
-	require.Equal(true, campaignResult.Elected)
+	require.True(campaignResult.Elected)
+	require.Equal("client1", campaignResult.Leader)
+	require.Equal("default", campaignResult.Kind)
+
+	campaignResult, err = client.Campaign(ctx, cReq1)
+	require.NoError(err)
+	require.True(campaignResult.Elected)
 
 	for i := 0; i < 100; i++ {
 		campaignResult, err := client.Campaign(ctx, cReq2)
 		require.NoError(err)
-		require.Equal(false, campaignResult.Elected)
+		require.False(campaignResult.Elected)
 
 		extendResult, err := client.ExtendElectedTerm(ctx, eReq1)
 		require.NoError(err)
-		require.Equal(true, extendResult.Value)
+		require.True(extendResult.Value)
 
 		leaderReq, err := client.GetLeader(ctx, &eagrpc.GetLeaderRequest{Election: "election1"})
 		require.NoError(err)
@@ -73,13 +79,28 @@ func TestGRPCService(t *testing.T) {
 	require.NoError(err)
 	require.True(resignResult.Value)
 
+	cReq2.Kind = "new"
 	campaignResult, err = client.Campaign(ctx, cReq2)
 	require.NoError(err)
-	require.Equal(true, campaignResult.Elected)
+	require.True(campaignResult.Elected)
 
 	campaignResult, err = client.Campaign(ctx, cReq1)
 	require.NoError(err)
-	require.Equal(false, campaignResult.Elected)
+	require.True(campaignResult.Elected)
+
+	cReq2.Candidate = "client3"
+	campaignResult, err = client.Campaign(ctx, cReq2)
+	require.NoError(err)
+	require.False(campaignResult.Elected)
+
+	hReq := &eagrpc.HandoverRequest{Election: "election1", Leader: "client2", Kind: cReq2.Kind, Term: 3000}
+	handoverResult, err := client.Handover(ctx, hReq)
+	require.NoError(err)
+	require.True(handoverResult.Value)
+
+	leaderResult, err := client.GetLeader(ctx, &eagrpc.GetLeaderRequest{Election: "election1", Kind: cReq2.Kind})
+	require.NoError(err)
+	require.Equal("client2", leaderResult.Value)
 }
 
 func BenchmarkGRPCService(b *testing.B) {

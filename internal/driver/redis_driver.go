@@ -33,6 +33,10 @@ func (rl *RedisLease) ID() uint64 {
 	return rl.id
 }
 
+func (rl *RedisLease) Kind() string {
+	return rl.kind
+}
+
 func (rl *RedisLease) Grant(ctx context.Context) error {
 	err := rl.mu.TryLockContext(ctx)
 	if err == nil {
@@ -69,15 +73,40 @@ func (rl *RedisLease) Extend(ctx context.Context) error {
 		if rl.driver.isRedisUnhealthy(err) {
 			return &lease.UnavailableError{Err: err}
 		}
+
 		errTaken := &redlock.ErrTaken{}
 		if errors.As(err, &errTaken) {
 			e, _ := err.(*redlock.ErrTaken) //nolint:errorlint
 			return &lease.TakenError{Nodes: e.Nodes}
 		}
+
 		return &lease.ExtendFailError{Lease: rl.mu.Name(), Err: err}
 	}
 	if !ok {
 		return &lease.NonexistError{Lease: rl.mu.Name()}
+	}
+
+	return nil
+}
+
+func (rl *RedisLease) Handover(ctx context.Context, holder string) error {
+	ok, err := rl.mu.HandoverContext(ctx, holder)
+	if err != nil {
+		if rl.driver.isRedisUnhealthy(err) {
+			return &lease.UnavailableError{Err: err}
+		}
+
+		errTaken := &redlock.ErrTaken{}
+		if errors.As(err, &errTaken) {
+			e, _ := err.(*redlock.ErrTaken) //nolint:errorlint
+			return &lease.TakenError{Nodes: e.Nodes}
+		}
+
+		return &lease.HandoverFailError{Lease: rl.mu.Name(), Holder: holder, Err: err}
+	}
+
+	if !ok {
+		return &lease.HandoverFailError{Lease: rl.mu.Name(), Holder: holder}
 	}
 
 	return nil
@@ -130,6 +159,8 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 		} else {
 			logging.Warn("Initial key-value driver in unavailable state")
 		}
+	} else {
+		inst.SetAgentStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode})
 	}
 
 	return inst, err

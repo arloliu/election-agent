@@ -22,6 +22,7 @@ const (
 	Election_Campaign_FullMethodName          = "/grpc.election_agent.v1.Election/Campaign"
 	Election_ExtendElectedTerm_FullMethodName = "/grpc.election_agent.v1.Election/ExtendElectedTerm"
 	Election_Resign_FullMethodName            = "/grpc.election_agent.v1.Election/Resign"
+	Election_Handover_FullMethodName          = "/grpc.election_agent.v1.Election/Handover"
 	Election_GetLeader_FullMethodName         = "/grpc.election_agent.v1.Election/GetLeader"
 	Election_GetPods_FullMethodName           = "/grpc.election_agent.v1.Election/GetPods"
 )
@@ -33,6 +34,7 @@ type ElectionClient interface {
 	Campaign(ctx context.Context, in *CampaignRequest, opts ...grpc.CallOption) (*CampaignResult, error)
 	ExtendElectedTerm(ctx context.Context, in *ExtendElectedTermRequest, opts ...grpc.CallOption) (*BoolValue, error)
 	Resign(ctx context.Context, in *ResignRequest, opts ...grpc.CallOption) (*BoolValue, error)
+	Handover(ctx context.Context, in *HandoverRequest, opts ...grpc.CallOption) (*BoolValue, error)
 	GetLeader(ctx context.Context, in *GetLeaderRequest, opts ...grpc.CallOption) (*StringValue, error)
 	GetPods(ctx context.Context, in *GetPodsRequest, opts ...grpc.CallOption) (*Pods, error)
 }
@@ -72,6 +74,15 @@ func (c *electionClient) Resign(ctx context.Context, in *ResignRequest, opts ...
 	return out, nil
 }
 
+func (c *electionClient) Handover(ctx context.Context, in *HandoverRequest, opts ...grpc.CallOption) (*BoolValue, error) {
+	out := new(BoolValue)
+	err := c.cc.Invoke(ctx, Election_Handover_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *electionClient) GetLeader(ctx context.Context, in *GetLeaderRequest, opts ...grpc.CallOption) (*StringValue, error) {
 	out := new(StringValue)
 	err := c.cc.Invoke(ctx, Election_GetLeader_FullMethodName, in, out, opts...)
@@ -97,6 +108,7 @@ type ElectionServer interface {
 	Campaign(context.Context, *CampaignRequest) (*CampaignResult, error)
 	ExtendElectedTerm(context.Context, *ExtendElectedTermRequest) (*BoolValue, error)
 	Resign(context.Context, *ResignRequest) (*BoolValue, error)
+	Handover(context.Context, *HandoverRequest) (*BoolValue, error)
 	GetLeader(context.Context, *GetLeaderRequest) (*StringValue, error)
 	GetPods(context.Context, *GetPodsRequest) (*Pods, error)
 	mustEmbedUnimplementedElectionServer()
@@ -114,6 +126,9 @@ func (UnimplementedElectionServer) ExtendElectedTerm(context.Context, *ExtendEle
 }
 func (UnimplementedElectionServer) Resign(context.Context, *ResignRequest) (*BoolValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Resign not implemented")
+}
+func (UnimplementedElectionServer) Handover(context.Context, *HandoverRequest) (*BoolValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Handover not implemented")
 }
 func (UnimplementedElectionServer) GetLeader(context.Context, *GetLeaderRequest) (*StringValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLeader not implemented")
@@ -188,6 +203,24 @@ func _Election_Resign_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Election_Handover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HandoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ElectionServer).Handover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Election_Handover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ElectionServer).Handover(ctx, req.(*HandoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Election_GetLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetLeaderRequest)
 	if err := dec(in); err != nil {
@@ -242,6 +275,10 @@ var Election_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Resign",
 			Handler:    _Election_Resign_Handler,
+		},
+		{
+			MethodName: "Handover",
+			Handler:    _Election_Handover_Handler,
 		},
 		{
 			MethodName: "GetLeader",

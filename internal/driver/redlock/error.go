@@ -5,13 +5,14 @@ import (
 	"fmt"
 )
 
-// ErrFailed is the error resulting if redlock fails to acquire the lock after
-// exhausting all retries.
+// ErrFailed is the error resulting if redlock fails to acquire the lock after exhausting all retries.
 var ErrFailed = errors.New("redlock: failed to acquire lock")
 
-// ErrExtendFailed is the error resulting if redlock fails to extend the
-// lock.
+// ErrExtendFailed is the error resulting if redlock fails to extend the lock.
 var ErrExtendFailed = errors.New("redlock: failed to extend lock")
+
+// ErrHandoverFailed is the error resulting if redlock fails to assign a new value to the current lock.
+var ErrHandoverFailed = errors.New("redlock: failed to handover")
 
 // ErrLockAlreadyExpired is the error resulting if trying to unlock the lock which already expired.
 var ErrLockAlreadyExpired = errors.New("redlock: failed to unlock, lock was already expired")
