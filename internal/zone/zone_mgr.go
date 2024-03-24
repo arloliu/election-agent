@@ -128,10 +128,6 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriv
 }
 
 func (zm *zoneManager) Start() error {
-	if !zm.cfg.Zone.Enable {
-		return nil
-	}
-
 	zm.ticker = time.NewTicker(zm.cfg.Zone.CheckInterval)
 	go func() {
 		for {
@@ -382,7 +378,9 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 // Check zone and peers status and set proper agent state and mode.
 // This method is seperated from zoneManager to support unit testing.
 func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm ZoneManager, lm *lease.LeaseManager) {
+	// only update the local state cache when agent is in the standalone mode
 	if !status.zoomEnable {
+		lm.SetStateCache(status.state)
 		return
 	}
 
