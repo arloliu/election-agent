@@ -17,22 +17,22 @@ var ErrHandoverFailed = errors.New("redlock: failed to handover")
 // ErrLockAlreadyExpired is the error resulting if trying to unlock the lock which already expired.
 var ErrLockAlreadyExpired = errors.New("redlock: failed to unlock, lock was already expired")
 
-// ErrTaken happens when the lock is already taken in a quorum on nodes.
-type ErrTaken struct {
+// TakenError happens when the lock is already taken in a quorum on nodes.
+type TakenError struct {
 	Nodes []int
 }
 
-func (err ErrTaken) Error() string {
+func (err TakenError) Error() string {
 	return fmt.Sprintf("lock already taken, locked nodes: %v", err.Nodes)
 }
 
-// ErrNodeTaken is the error resulting if the lock is already taken in one of
+// NodeTakenError is the error resulting if the lock is already taken in one of
 // the cluster's nodes
-type ErrNodeTaken struct {
+type NodeTakenError struct {
 	Node int
 }
 
-func (err *ErrNodeTaken) Error() string {
+func (err *NodeTakenError) Error() string {
 	return fmt.Sprintf("node #%d: lock already taken", err.Node)
 }
 

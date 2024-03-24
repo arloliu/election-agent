@@ -244,7 +244,7 @@ func actStatusOpAsync(conns []Conn, quorum int, actFunc statusFunc) (int, error)
 			err = multierror.Append(err, &RedisError{Node: r.node, Err: r.err})
 		} else {
 			taken = append(taken, r.node)
-			err = multierror.Append(err, &ErrNodeTaken{Node: r.node})
+			err = multierror.Append(err, &NodeTakenError{Node: r.node})
 		}
 
 		if n >= quorum {
@@ -252,12 +252,12 @@ func actStatusOpAsync(conns []Conn, quorum int, actFunc statusFunc) (int, error)
 		}
 
 		if len(taken) >= quorum {
-			return n, &ErrTaken{Nodes: taken}
+			return n, &TakenError{Nodes: taken}
 		}
 	}
 
 	if len(taken) >= quorum {
-		return n, &ErrTaken{Nodes: taken}
+		return n, &TakenError{Nodes: taken}
 	}
 
 	if n < quorum {

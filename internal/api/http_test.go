@@ -110,6 +110,10 @@ func TestHTTPService(t *testing.T) {
 	require.True(resp.Elected)
 	require.Equal("client1", resp.Leader)
 
+	leader, err = getLeader(router, "election1", "kind2")
+	require.NoError(err)
+	require.Equal("client1", leader)
+
 	// client2 campaign kind1/election1 again
 	statusCode, resp, err = sendCampaign(router, "election1", "kind1", "client2", 3000)
 	require.NoError(err)

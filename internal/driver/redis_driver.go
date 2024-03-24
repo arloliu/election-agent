@@ -74,9 +74,9 @@ func (rl *RedisLease) Extend(ctx context.Context) error {
 			return &lease.UnavailableError{Err: err}
 		}
 
-		errTaken := &redlock.ErrTaken{}
-		if errors.As(err, &errTaken) {
-			e, _ := err.(*redlock.ErrTaken) //nolint:errorlint
+		TakenError := &redlock.TakenError{}
+		if errors.As(err, &TakenError) {
+			e, _ := err.(*redlock.TakenError) //nolint:errorlint
 			return &lease.TakenError{Nodes: e.Nodes}
 		}
 
@@ -96,9 +96,9 @@ func (rl *RedisLease) Handover(ctx context.Context, holder string) error {
 			return &lease.UnavailableError{Err: err}
 		}
 
-		errTaken := &redlock.ErrTaken{}
-		if errors.As(err, &errTaken) {
-			e, _ := err.(*redlock.ErrTaken) //nolint:errorlint
+		TakenError := &redlock.TakenError{}
+		if errors.As(err, &TakenError) {
+			e, _ := err.(*redlock.TakenError) //nolint:errorlint
 			return &lease.TakenError{Nodes: e.Nodes}
 		}
 
