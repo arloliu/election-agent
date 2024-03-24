@@ -17,6 +17,7 @@ func init() {
 	electCmd.AddCommand(campaignCmd)
 	electCmd.AddCommand(extendCmd)
 	electCmd.AddCommand(resignCmd)
+	electCmd.AddCommand(handoverCmd)
 	electCmd.AddCommand(leaderCmd)
 	electCmd.AddCommand(podsCmd)
 }
@@ -83,7 +84,7 @@ func extendElectedTerm(cmd *cobra.Command, args []string) error {
 		reportError(err)
 	}
 
-	term, err := parseInt[int32](args[3])
+	term, err := parseInt[int32](args[2])
 	if err != nil {
 		reportError(err)
 	}
@@ -148,6 +149,46 @@ func resign(cmd *cobra.Command, args []string) error {
 		Leader:   args[1],
 	}
 	result, err := client.Election.Resign(ctx, req)
+	if err != nil {
+		reportError(err)
+	}
+
+	output, err := marshalProtoJSON(result)
+	if err != nil {
+		reportError(err)
+	}
+	fmt.Println(output)
+	return nil
+}
+
+var handoverCmd = &cobra.Command{
+	Use:   "handover <election> <leader> <term>",
+	Short: "Handover election to new leader",
+	Args:  cobra.ExactArgs(3),
+	RunE:  handover,
+}
+
+func handover(cmd *cobra.Command, args []string) error {
+	if Hostname == "" {
+		return errors.New("hostname is required, please use -h or --host to specify hostname")
+	}
+
+	client, err := newGrpcClient(ctx, Hostname)
+	if err != nil {
+		reportError(err)
+	}
+
+	term, err := parseInt[int32](args[2])
+	if err != nil {
+		reportError(err)
+	}
+
+	req := &eagrpc.HandoverRequest{
+		Election: args[0],
+		Leader:   args[1],
+		Term:     term,
+	}
+	result, err := client.Election.Handover(ctx, req)
 	if err != nil {
 		reportError(err)
 	}
