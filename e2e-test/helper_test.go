@@ -247,7 +247,7 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 				log.Printf("  * Unmatched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
 				matched = false
 			} else {
-				log.Printf("  * Martched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
+				log.Printf("  * Matched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
 			}
 		}
 		if matched {
