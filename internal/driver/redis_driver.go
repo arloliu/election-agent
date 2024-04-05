@@ -284,10 +284,15 @@ func (rd *RedisKVDriver) GetAgentStatus() (*agent.Status, error) {
 	} else {
 		zoomEnable = redlock.IsBoolStrTrue(replies[2])
 	}
-
-	status.State = replies[0]
-	status.Mode = replies[1]
-	status.ZoomEnable = zoomEnable
+	if !rd.cfg.Zone.Enable {
+		status.State = rd.cfg.DefaultState
+		status.Mode = agent.NormalMode
+		status.ZoomEnable = false
+	} else {
+		status.State = replies[0]
+		status.Mode = replies[1]
+		status.ZoomEnable = zoomEnable
+	}
 
 	if status.State == agent.UnavailableState || status.State == "" {
 		// change state to "empty" state when the previous "unavailable" value receieved
