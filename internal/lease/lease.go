@@ -60,7 +60,15 @@ type UnavailableError struct {
 }
 
 func (e UnavailableError) Error() string {
-	return fmt.Errorf("service unavailable, error: %w", e.Err).Error()
+	return e.Err.Error()
+}
+
+type AgentStandbyError struct {
+	Err error
+}
+
+func (e AgentStandbyError) Error() string {
+	return e.Err.Error()
 }
 
 type TakenError struct {
@@ -103,6 +111,11 @@ func IsUnavailableError(err error) bool {
 	return errors.As(err, &uerr)
 }
 
+func IsAgentStandbyError(err error) bool {
+	uerr := &AgentStandbyError{}
+	return errors.As(err, &uerr)
+}
+
 func IsTakenError(err error) bool {
 	uerr := &TakenError{}
 	return errors.As(err, &uerr)
@@ -125,5 +138,5 @@ func IsHandoverFailError(err error) bool {
 
 var (
 	ErrServiceUnavalable = &UnavailableError{Err: errors.New("service unavailable")}
-	ErrAgentStandby      = errors.New("agent is in standby mode")
+	ErrAgentStandby      = &AgentStandbyError{Err: errors.New("agent is in standby mode")}
 )

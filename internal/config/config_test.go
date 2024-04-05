@@ -26,6 +26,9 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("EA_HTTP_ENABLE", "false")
 	t.Setenv("EA_HTTP_PORT", "2345")
 
+	t.Setenv("EA_METRIC_ENABLE", "false")
+	t.Setenv("EA_METRIC_REQUEST_DURATION_BUCKETS", "0.01,0.02,0.03,0.04")
+
 	t.Setenv("EA_LEASE_CACHE", "true")
 	t.Setenv("EA_LEASE_CACHE_SIZE", "1234")
 	t.Setenv("EA_LEASE_TIMEOUT", "1200ms")
@@ -72,6 +75,14 @@ grpc:
 http:
     enable: false
     port: 2345
+
+metric:
+    enable: false
+    request_duration_buckets:
+        - 0.01
+        - 0.02
+        - 0.03
+        - 0.04
 
 lease:
     cache: true
@@ -138,6 +149,9 @@ func verifyConfig(t *testing.T) {
 
 	require.False(cfg.HTTP.Enable)
 	require.Equal(2345, cfg.HTTP.Port)
+
+	require.False(cfg.Metric.Enable)
+	require.Equal([]float64{0.01, 0.02, 0.03, 0.04}, cfg.Metric.RequestDurationBuckets)
 
 	require.Equal("cluster", cfg.Redis.Mode)
 	require.Equal([]string{"redis://c1r1?addr=c1r2&addr=c1r3", "redis://c2r1?addr=c2r2&addr=c2r3", "redis://c3r1?addr=c3r2&addr=c3r3"}, cfg.Redis.URLs)

@@ -29,6 +29,7 @@ func TestHTTPService(t *testing.T) {
 		KeyPrefix:    "test_agent",
 		GRPC:         config.GRPCConfig{Enable: false},
 		HTTP:         config.HTTPConfig{Enable: true, Port: 18080},
+		Metric:       config.MetricConfig{Enable: false},
 		Lease: config.LeaseConfig{
 			CacheSize: 8192,
 		},

@@ -11,6 +11,7 @@ import (
 	"election-agent/internal/kube"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
+	"election-agent/internal/metric"
 	"election-agent/internal/zone"
 )
 
@@ -35,7 +36,8 @@ func startMockServer(ctx context.Context, cfg *config.Config) (*Server, error) {
 		return nil, errors.New("failed to create mock redis leader driver")
 	}
 
-	mgr := lease.NewLeaseManager(ctx, cfg, driver)
+	metricMgr := metric.NewMetricManager(cfg)
+	mgr := lease.NewLeaseManager(ctx, cfg, metricMgr, driver)
 
 	var kubeClient kube.KubeClient
 	if cfg.Kube.Enable {
@@ -45,7 +47,7 @@ func startMockServer(ctx context.Context, cfg *config.Config) (*Server, error) {
 			return nil, err
 		}
 	}
-	zoneMgr, err := zone.NewZoneManager(ctx, cfg, driver, mgr)
+	zoneMgr, err := zone.NewZoneManager(ctx, cfg, driver, mgr, metricMgr)
 	if err != nil {
 		return nil, err
 	}

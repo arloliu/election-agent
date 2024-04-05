@@ -19,8 +19,12 @@ Enjoy seamless leader election with a high-performance agent service. Forget abo
 * Provides high-performance gRPC and HTTP Rest API service.
 * Provides additional Kubernetes resource discovery API for retrieving the Pod, ReplicaSet, and Deployment relationship.
 * Supports Kubernetes gRPC and HTTP liveness and readiness probe.
+* Supports prometheus metrics.
 
 ## How To Use
+### Metrics
+Please refer to [Metrics Documentation](./docs/metrics.md) for details.
+
 ### Environment Variable
 > Please refer to `internal/config.go` for details.
 

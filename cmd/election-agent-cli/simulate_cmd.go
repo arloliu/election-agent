@@ -172,8 +172,8 @@ func (s *simulateClient) chooseLeader() error {
 				if !c.active {
 					continue
 				}
-
-				ret, err := c.client.Campaign(s.ctx, campReqN(i, j))
+				req := campReqN(i, j)
+				ret, err := c.client.Campaign(s.ctx, req)
 
 				switch simState {
 				case agent.ActiveState:
@@ -244,7 +244,7 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 
 					switch simState {
 					case agent.ActiveState:
-						if err == nil || ret.Elected {
+						if ret != nil && ret.Elected {
 							return fmt.Errorf("Inactive candidate should campaign term fail (peer: %d, idx: %d), got error: %w", i, j, err)
 						}
 					case agent.StandbyState:
@@ -304,7 +304,7 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 	}
 
 	// start to simluate
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 	for {
 		select {
 		case <-ticker.C:

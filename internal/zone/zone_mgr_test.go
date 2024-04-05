@@ -11,6 +11,7 @@ import (
 	"election-agent/internal/driver"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
+	"election-agent/internal/metric"
 	eagrpc "election-agent/proto/election_agent/v1"
 
 	mock "github.com/stretchr/testify/mock"
@@ -41,6 +42,9 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 		DefaultState: "active",
 		KeyPrefix:    "test_agent",
 		Redis:        config.RedisConfig{},
+		GRPC:         config.GRPCConfig{Enable: false},
+		HTTP:         config.HTTPConfig{Enable: false},
+		Metric:       config.MetricConfig{Enable: false},
 		Zone: config.ZoneConfig{
 			Enable:         true,
 			Name:           "test-zone1",
@@ -176,13 +180,15 @@ func newMockZoneManager(ctx context.Context, cfg *config.Config) (*mockComponent
 		return nil, errors.New("m.kvDriver is nil")
 	}
 
-	m.lm = lease.NewLeaseManager(ctx, cfg, m.kvDriver)
+	metricMgr := metric.NewMetricManager(cfg)
+
+	m.lm = lease.NewLeaseManager(ctx, cfg, metricMgr, m.kvDriver)
 	if m.lm == nil {
 		return nil, errors.New("lease manager is nil")
 	}
 
 	var err error
-	m.zm, err = NewZoneManager(ctx, cfg, m.kvDriver, m.lm)
+	m.zm, err = NewZoneManager(ctx, cfg, m.kvDriver, m.lm, metricMgr)
 	if err != nil {
 		return nil, err
 	}

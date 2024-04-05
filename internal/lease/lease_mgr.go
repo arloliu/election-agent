@@ -7,20 +7,22 @@ import (
 
 	"election-agent/internal/agent"
 	"election-agent/internal/config"
+	"election-agent/internal/metric"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type LeaseManager struct {
-	ctx    context.Context
-	cfg    *config.Config
-	state  *agent.State
-	driver KVDriver
-	cache  *lru.TwoQueueCache[uint64, Lease]
-	mu     sync.Mutex
+	ctx       context.Context
+	cfg       *config.Config
+	state     *agent.State
+	metricMgr *metric.MetricManager
+	driver    KVDriver
+	cache     *lru.TwoQueueCache[uint64, Lease]
+	mu        sync.Mutex
 }
 
-func NewLeaseManager(ctx context.Context, cfg *config.Config, driver KVDriver) *LeaseManager {
+func NewLeaseManager(ctx context.Context, cfg *config.Config, metricMgr *metric.MetricManager, driver KVDriver) *LeaseManager {
 	var cache *lru.TwoQueueCache[uint64, Lease]
 	if cfg.Lease.Cache {
 		size := cfg.Lease.CacheSize
@@ -31,18 +33,23 @@ func NewLeaseManager(ctx context.Context, cfg *config.Config, driver KVDriver) *
 	}
 
 	mgr := &LeaseManager{
-		ctx:    ctx,
-		cfg:    cfg,
-		state:  agent.NewState(cfg.DefaultState, cfg.StateCacheTTL),
-		driver: driver,
-		cache:  cache,
+		ctx:       ctx,
+		cfg:       cfg,
+		state:     agent.NewState(cfg.DefaultState, cfg.StateCacheTTL),
+		metricMgr: metricMgr,
+		driver:    driver,
+		cache:     cache,
 	}
 	mgr.state.Store(cfg.DefaultState)
 
 	return mgr
 }
 
-func (lm *LeaseManager) GetLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) Lease {
+func (lm *LeaseManager) MetricManager() *metric.MetricManager {
+	return lm.metricMgr
+}
+
+func (lm *LeaseManager) getLease(name string, kind string, holder string, ttl time.Duration) Lease {
 	if lm.cfg.Lease.Cache {
 		id := lm.driver.LeaseID(name, kind, holder, ttl)
 		if lease, ok := lm.cache.Get(id); ok {
@@ -64,18 +71,29 @@ type GrantLeaseResult struct {
 	TTL    time.Duration
 }
 
-func (lm *LeaseManager) GrantLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) (*GrantLeaseResult, error) {
-	result := &GrantLeaseResult{Name: name, TTL: ttl}
-	state := lm.GetState()
-	if state == agent.UnavailableState {
-		return result, ErrServiceUnavalable
-	} else if state == agent.StandbyState {
-		return result, ErrAgentStandby
+func (lm *LeaseManager) GrantLease(ctx context.Context, name string, kind string, candidate string, ttl time.Duration) (result *GrantLeaseResult, err error) {
+	start := time.Now()
+	defer func() {
+		status := true
+		if err != nil && IsUnavailableError(err) {
+			status = false
+		}
+		lm.postHook("campaign", status, start)
+	}()
+
+	if err = lm.preHook("campaign"); err != nil {
+		lease := lm.getLease(name, kind, candidate, ttl)
+		result = &GrantLeaseResult{Name: name, TTL: ttl, Kind: lease.Kind()}
+		return
 	}
 
-	lease := lm.GetLease(ctx, name, kind, holder, ttl)
-	result.Kind = lease.Kind()
+	result, err = lm.grantLease(ctx, name, kind, candidate, ttl)
+	return
+}
 
+func (lm *LeaseManager) grantLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) (*GrantLeaseResult, error) {
+	lease := lm.getLease(name, kind, holder, ttl)
+	result := &GrantLeaseResult{Name: name, TTL: ttl, Kind: lease.Kind()}
 	err := lease.Grant(ctx)
 	if err != nil {
 		curHolder, err2 := lm.GetLeaseHolder(ctx, name, kind)
@@ -90,52 +108,80 @@ func (lm *LeaseManager) GrantLease(ctx context.Context, name string, kind string
 	return result, nil
 }
 
-func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, kind string, holder string) error {
-	state := lm.GetState()
-	if state == agent.UnavailableState {
-		return ErrServiceUnavalable
-	} else if state == agent.StandbyState {
-		return ErrAgentStandby
+func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, kind string, holder string) (err error) {
+	start := time.Now()
+	defer lm.postHook("resign", err == nil, start)
+
+	if err = lm.preHook("resign"); err != nil {
+		return
 	}
 
-	lease := lm.GetLease(ctx, name, kind, holder, 0)
+	lease := lm.getLease(name, kind, holder, 0)
 	if lm.cfg.Lease.Cache {
 		lm.cache.Remove(lease.ID())
 	}
-	return lease.Revoke(ctx)
+	err = lease.Revoke(ctx)
+	return
 }
 
-func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) error {
-	state := lm.GetState()
-	if state == agent.UnavailableState {
-		return ErrServiceUnavalable
-	} else if state == agent.StandbyState {
-		return ErrAgentStandby
+func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) (err error) {
+	start := time.Now()
+	defer lm.postHook("extend_elected_term", err == nil, start)
+
+	if err = lm.preHook("extend_elected_term"); err != nil {
+		return
 	}
 
-	lease := lm.GetLease(ctx, name, kind, holder, ttl)
-	return lease.Extend(ctx)
+	lease := lm.getLease(name, kind, holder, ttl)
+	err = lease.Extend(ctx)
+	return
 }
 
-func (lm *LeaseManager) HandoverLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) error {
-	state := lm.GetState()
-	if state == agent.UnavailableState {
-		return ErrServiceUnavalable
-	} else if state == agent.StandbyState {
-		return ErrAgentStandby
+func (lm *LeaseManager) HandoverLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) (err error) {
+	start := time.Now()
+	defer lm.postHook("handover", err == nil, start)
+
+	if err = lm.preHook("handover"); err != nil {
+		return
 	}
 
 	lease := lm.driver.NewLease(name, kind, holder, ttl)
-	return lease.Handover(ctx, holder)
+	err = lease.Handover(ctx, holder)
+	return
 }
 
-func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind string) (string, error) {
-	return lm.driver.GetHolder(ctx, name, kind)
+func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind string) (holder string, err error) {
+	start := time.Now()
+	defer lm.postHook("get_leader", err == nil, start)
+
+	if err = lm.preHook("get_leader"); err != nil {
+		return
+	}
+
+	holder, err = lm.driver.GetHolder(ctx, name, kind)
+	return
 }
 
-func (lm *LeaseManager) GetState() string {
+func (lm *LeaseManager) preHook(action string) error {
+	lm.metricMgr.RequestBegin(action)
+
+	state := lm.getState()
+	if state == agent.UnavailableState {
+		lm.metricMgr.IncAgentUnavailableState()
+		return ErrServiceUnavalable
+	} else if state == agent.StandbyState {
+		return ErrAgentStandby
+	}
+	return nil
+}
+
+func (lm *LeaseManager) postHook(action string, status bool, start time.Time) {
+	lm.metricMgr.RequestFinish(action, status, time.Since(start))
+}
+
+func (lm *LeaseManager) getState() string {
 	if !lm.cfg.Zone.Enable {
-		return agent.ActiveState
+		return lm.cfg.DefaultState
 	}
 
 	lm.mu.Lock()

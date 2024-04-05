@@ -92,7 +92,7 @@ func (s *ElectionGRPCService) ExtendElectedTerm(ctx context.Context, req *pb.Ext
 			return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
 		}
 
-		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unknown, err.Error())
+		return &pb.BoolValue{Value: false}, nil
 	}
 	return &pb.BoolValue{Value: true}, nil
 }
@@ -109,6 +109,8 @@ func (s *ElectionGRPCService) Resign(ctx context.Context, req *pb.ResignRequest)
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
+		} else if lease.IsAgentStandbyError(err) {
+			return &pb.BoolValue{Value: false}, nil
 		}
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.NotFound, err.Error())
 	}
@@ -131,6 +133,8 @@ func (s *ElectionGRPCService) Handover(ctx context.Context, req *pb.HandoverRequ
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.BoolValue{Value: false}, status.Error(codes.FailedPrecondition, err.Error())
+		} else if lease.IsAgentStandbyError(err) {
+			return &pb.BoolValue{Value: false}, nil
 		}
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.Unknown, err.Error())
 	}
@@ -147,6 +151,8 @@ func (s *ElectionGRPCService) GetLeader(ctx context.Context, req *pb.GetLeaderRe
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			return &pb.StringValue{Value: ""}, status.Error(codes.FailedPrecondition, err.Error())
+		} else if lease.IsAgentStandbyError(err) {
+			return &pb.StringValue{Value: ""}, nil
 		}
 		return &pb.StringValue{Value: ""}, status.Errorf(codes.NotFound, err.Error())
 	}

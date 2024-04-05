@@ -25,6 +25,7 @@ func TestGRPCService(t *testing.T) {
 		KeyPrefix:    "test_agent",
 		GRPC:         config.GRPCConfig{Enable: true, Port: 18080},
 		HTTP:         config.HTTPConfig{Enable: false},
+		Metric:       config.MetricConfig{Enable: false},
 		Lease: config.LeaseConfig{
 			CacheSize: 8192,
 		},
@@ -110,6 +111,8 @@ func BenchmarkGRPCService(b *testing.B) {
 		LogLevel:  "warning",
 		KeyPrefix: "test_agent",
 		GRPC:      config.GRPCConfig{Enable: true, Port: 18080},
+		HTTP:      config.HTTPConfig{Enable: false},
+		Metric:    config.MetricConfig{Enable: false},
 		Lease: config.LeaseConfig{
 			CacheSize: 8192,
 		},

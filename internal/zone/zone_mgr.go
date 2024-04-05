@@ -15,6 +15,7 @@ import (
 	"election-agent/internal/config"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
+	"election-agent/internal/metric"
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -56,6 +57,7 @@ type zoneManager struct {
 	ticker      *time.Ticker
 	peerClients []eagrpc.ControlClient
 	zcClient    *http.Client
+	metricMgr   *metric.MetricManager
 }
 
 type zoneStatus struct {
@@ -70,7 +72,7 @@ type zoneStatus struct {
 	peerStatus    []*eagrpc.AgentStatus
 }
 
-func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriver, leaseMgr *lease.LeaseManager) (*zoneManager, error) {
+func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriver, leaseMgr *lease.LeaseManager, metricMgr *metric.MetricManager) (*zoneManager, error) {
 	mgr := &zoneManager{
 		ctx:         ctx,
 		cfg:         cfg,
@@ -78,6 +80,7 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriv
 		driver:      driver,
 		leaseMgr:    leaseMgr,
 		peerClients: make([]eagrpc.ControlClient, 0, len(cfg.Zone.PeerURLs)),
+		metricMgr:   metricMgr,
 	}
 
 	if !cfg.Zone.Enable {
@@ -370,6 +373,16 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	status.peerStatus, _ = zm.GetPeerStatus()
 	if len(status.peerStatus) == 0 {
 		status.peerConnected = false
+	}
+
+	if zm.metricMgr.Enabled() {
+		// check and set metrics in goroutine to prevent getZoneStatus from taking too long to execute
+		go func(peerConnected int, zcConnected bool) {
+			n, _ := zm.driver.Ping(zm.ctx)
+			zm.metricMgr.SetDisconnectedRedisBackends(len(zm.cfg.Redis.URLs) - n)
+			zm.metricMgr.SetDisconnectedPeers(len(zm.cfg.Zone.PeerURLs) - peerConnected)
+			zm.metricMgr.IsZCConnected(zcConnected)
+		}(len(status.peerStatus), status.zcConnected)
 	}
 
 	return status

@@ -151,7 +151,7 @@ func (srv *Server) startHTTP() error {
 	go func() {
 		srv.ready <- true
 
-		logging.Infow("HTTP service serves on", "addr", listenAddr)
+		logging.Infow("HTTP service serves on", "addr", listenAddr, "metrics_enable", srv.cfg.Metric.Enable)
 		err := srv.httpServer.ListenAndServe()
 		if err != nil {
 			srv.ready <- false

@@ -41,6 +41,12 @@ func (s *ElectionHTTPService) MountHandlers(router *gin.Engine) {
 	// k8s related endpointes
 	router.GET("/kube/:namespace/:deployment/pods", s.getPods)
 
+	// metrics endpoint
+	metricManager := s.leaseMgr.MetricManager()
+	if metricManager.Enabled() {
+		router.GET("/metrics", gin.WrapH(s.leaseMgr.MetricManager().HTTPHandler()))
+	}
+
 	// the k8s liveness and readiness probe endpoints
 	router.GET("/livez", s.livez)
 	router.GET("/readyz", s.readyz)
@@ -119,7 +125,7 @@ func (s *ElectionHTTPService) campaign(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"elected": false, "leader": result.Holder, "kind": result.Kind})
+		c.JSON(http.StatusOK, gin.H{"elected": false, "leader": result.Holder, "kind": result.Kind, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"elected": true, "leader": result.Holder, "kind": result.Kind})
@@ -217,6 +223,9 @@ func (s *ElectionHTTPService) resign(c *gin.Context) {
 	if err != nil {
 		if lease.IsUnavailableError(err) {
 			c.AbortWithStatusJSON(http.StatusPreconditionFailed, gin.H{"message": err.Error()})
+			return
+		} else if lease.IsAgentStandbyError(err) {
+			c.AbortWithStatusJSON(http.StatusTeapot, gin.H{"message": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})

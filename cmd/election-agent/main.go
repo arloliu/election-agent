@@ -14,6 +14,7 @@ import (
 	"election-agent/internal/kube"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
+	"election-agent/internal/metric"
 	"election-agent/internal/zone"
 )
 
@@ -51,9 +52,12 @@ func main() {
 			logging.Warnw("Failed to initialize k8s client", "error", err)
 		}
 	}
-	leaseMgr := lease.NewLeaseManager(ctx, cfg, kvDriver)
 
-	zoneMgr, err := zone.NewZoneManager(ctx, cfg, kvDriver, leaseMgr)
+	metricMgr := metric.NewMetricManager(cfg)
+
+	leaseMgr := lease.NewLeaseManager(ctx, cfg, metricMgr, kvDriver)
+
+	zoneMgr, err := zone.NewZoneManager(ctx, cfg, kvDriver, leaseMgr, metricMgr)
 	if err != nil {
 		logging.Fatalw("Failed to initialize zone manager", "error", err.Error())
 		return

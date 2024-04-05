@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -24,7 +25,7 @@ type Config struct {
 	LogLevel string `default:"info" split_words:"true" yaml:"log_level"`
 
 	// The name of election agent. It's required when `Zone.Enable` is `true`
-	Name string `yaml:"name"`
+	Name string `default:"election-agent" yaml:"name"`
 
 	// Prefix specifies the key prefix.
 	// The lease key will be formatted as `[cfg.KeyPrefix]/lease/<lease name>`.
@@ -41,11 +42,11 @@ type Config struct {
 	// Defaults to `30s`.
 	StateCacheTTL time.Duration `default:"0s" split_words:"true" yaml:"state_cache_ttl"`
 
-	Kube KubeConfig `yaml:"kube"` // K8S related settings.
-	GRPC GRPCConfig `yaml:"grpc"` // gRPC service related settings.
-	HTTP HTTPConfig `yaml:"http"` // HTTP service related settings.
-
-	Lease LeaseConfig `yaml:"lease"` // Lease related settings.
+	Kube   KubeConfig   `yaml:"kube"`   // K8S related settings.
+	GRPC   GRPCConfig   `yaml:"grpc"`   // gRPC service related settings.
+	HTTP   HTTPConfig   `yaml:"http"`   // HTTP service related settings.
+	Metric MetricConfig `yaml:"metric"` // Metric relate settings
+	Lease  LeaseConfig  `yaml:"lease"`  // Lease related settings.
 
 	Zone ZoneConfig `yaml:"zone"` // K8S multi-zone related settings.
 
@@ -77,7 +78,15 @@ type GRPCConfig struct {
 type HTTPConfig struct {
 	Enable bool `default:"true" yaml:"enable"` // Whether to enable HTTP service. Defaults to `true`.
 	Port   int  `default:"80" yaml:"port"`     // Port is the HTTP service port. Defaults to `80`.
+	// Whether to enable Prometheus metrics. Defaults to `true`.
 }
+
+type MetricConfig struct {
+	// Whether to enable Prometheus metrics. Defaults to `true`. It requires `http.enable` to be true.
+	Enable                 bool      `default:"true" yaml:"enable"`
+	RequestDurationBuckets []float64 `default:"0.1,0.25,0.5,1.0" split_words:"true"  yaml:"request_duration_buckets"`
+}
+
 type RedisConfig struct {
 	// Mode indicates the redis server mode. Differenet modes require different URLs format.
 	// Defaults to `single``.
@@ -183,6 +192,9 @@ func Init() error {
 	// TODO: implement stricter sanity check
 	if cfg.Driver == "redis" && !slices.Contains([]string{"single", "failover", "cluster"}, cfg.Redis.Mode) {
 		return fmt.Errorf("Unsupported redis mode:%s", cfg.Redis.Mode)
+	}
+	if !cfg.HTTP.Enable && cfg.Metric.Enable {
+		return errors.New("The config 'http.enable' needs to be true when `http.metrics_enable` is true")
 	}
 	Default = &cfg
 
