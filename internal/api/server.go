@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/keepalive"
 
 	eagrpc "election-agent/proto/election_agent/v1"
 
@@ -82,7 +83,19 @@ func (srv *Server) startGRPC() error {
 		return err
 	}
 
-	srv.grpcServer = grpc.NewServer()
+	srv.grpcServer = grpc.NewServer(
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             10 * time.Second, // If a client pings more than once every 10 seconds, terminate the connection
+			PermitWithoutStream: true,             // Allow pings even when there are no active streams
+		}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle:     15 * time.Second, // If a client is idle for 15 seconds, send a GOAWAY
+			MaxConnectionAge:      30 * time.Second, // If any connection is alive for more than 30 seconds, send a GOAWAY
+			MaxConnectionAgeGrace: 5 * time.Second,  // Allow 5 seconds for pending RPCs to complete before forcibly closing connections
+			Time:                  5 * time.Second,  // Ping the client if it is idle for 5 seconds to ensure the connection is still active
+			Timeout:               1 * time.Second,  // Wait 1 second for the ping ack before assuming the connection is dead
+		}),
+	)
 	electionService := newElectionGRPCService(srv.cfg, srv.leaseMgr, srv.kubeClient)
 	controlService := newControlGRPCService(srv.cfg, srv.leaseMgr, srv.zoneMgr)
 	eagrpc.RegisterElectionServer(srv.grpcServer, electionService)
