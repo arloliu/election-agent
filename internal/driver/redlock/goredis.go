@@ -41,6 +41,7 @@ func CreateConnections(ctx context.Context, cfg *config.Config) ([]Conn, error) 
 		opts.DialTimeout = 2 * time.Second
 		opts.ReadTimeout = 1 * time.Second
 		opts.WriteTimeout = 1 * time.Second
+		opts.DisableIndentity = true
 		clients = append(clients, redis.NewUniversalClient(opts))
 	}
 
