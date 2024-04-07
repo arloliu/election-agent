@@ -412,6 +412,7 @@ func utilSimluate(ctx context.Context, cfg *envconf.Config, host string, state s
 		"--election", election,
 		"--num", fmt.Sprint(numClients),
 		"--candidates", fmt.Sprint(candidates),
+		"--term", "5000",
 	}
 	stdout, err := utilPodExec(ctx, cfg, cmd)
 	if err != nil {
