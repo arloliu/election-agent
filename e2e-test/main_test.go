@@ -39,6 +39,7 @@ var (
 	stateChangeTimeout = 60 * time.Second
 	simDuration        = 15 * time.Second
 	simNumClients      = 1000
+	featureIterations  = 1
 )
 
 func TestMain(m *testing.M) { //nolint:cyclop
@@ -90,11 +91,19 @@ func TestMain(m *testing.M) { //nolint:cyclop
 		simNumClients = int(d)
 	}
 
+	if v := os.Getenv("FEATURE_ITERATIONS"); v != "" {
+		d, err := strconv.ParseInt(v, 10, 32)
+		if err != nil {
+			log.Fatal("FEATURE_ITERATIONS invalid")
+		}
+		featureIterations = int(d)
+	}
+
 	testEnv = env.NewWithConfig(cfg)
 	cluster := kind.NewCluster(clusterName)
 
-	log.Printf("Start E2E tests. clusterName=%s, namespace=%s, activeZoneTimeout=%s, stateChangeTimeout=%s, simDuration=%s, simNumClients=%d\n",
-		clusterName, namespace, activeZoneTimeout, stateChangeTimeout, simDuration, simNumClients)
+	log.Printf("Start E2E tests. clusterName=%s, namespace=%s, activeZoneTimeout=%s, stateChangeTimeout=%s, simDuration=%s, simNumClients=%d, featureIterations=%d\n",
+		clusterName, namespace, activeZoneTimeout, stateChangeTimeout, simDuration, simNumClients, featureIterations)
 
 	// Use Environment.Setup to configure pre-test setup
 	testEnv.Setup(

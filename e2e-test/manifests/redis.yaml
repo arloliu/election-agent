@@ -17,6 +17,28 @@ spec:
       containers:
       - name: redis
         image: redis:7.2
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli ping
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli ping
         resources:
           requests:
             cpu: 200m
@@ -47,6 +69,28 @@ spec:
       containers:
       - name: redis
         image: redis:7.2
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli ping
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli ping
         resources:
           requests:
             cpu: 200m
@@ -77,6 +121,28 @@ spec:
       containers:
       - name: redis
         image: redis:7.2
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli ping
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli ping
         resources:
           requests:
             cpu: 200m

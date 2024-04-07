@@ -318,9 +318,13 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 		}).
 		Feature()
 
-	// testFeatures := []features.Feature{f1, f2, f3, f4, f5, f6, f7, f8}
-	_ = f8
-	testFeatures := []features.Feature{f1, f2, f3, f4, f5, f6, f7}
+	featureList := []features.Feature{f1, f2, f3, f4, f5, f6, f7, f8}
+	testFeatures := make([]features.Feature, 0, len(featureList)*featureIterations)
+	for _, f := range featureList {
+		for i := 0; i < featureIterations; i++ {
+			testFeatures = append(testFeatures, f)
+		}
+	}
 	rand.Shuffle(len(testFeatures), func(i, j int) {
 		testFeatures[i], testFeatures[j] = testFeatures[j], testFeatures[i]
 	})
