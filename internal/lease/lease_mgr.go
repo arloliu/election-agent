@@ -2,7 +2,6 @@ package lease
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"election-agent/internal/agent"
@@ -20,7 +19,6 @@ type LeaseManager struct {
 	metricMgr *metric.MetricManager
 	driver    driver.KVDriver
 	cache     *lru.TwoQueueCache[uint64, Lease]
-	mu        sync.Mutex
 }
 
 func NewLeaseManager(ctx context.Context, cfg *config.Config, metricMgr *metric.MetricManager, drv driver.KVDriver) *LeaseManager {
@@ -188,9 +186,6 @@ func (lm *LeaseManager) getState() string {
 	if !lm.cfg.Zone.Enable {
 		return lm.cfg.DefaultState
 	}
-
-	lm.mu.Lock()
-	defer lm.mu.Unlock()
 
 	if lm.state.Expired() {
 		state, err := lm.driver.GetAgentState()

@@ -80,15 +80,14 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 }
 
 func (rd *RedisKVDriver) RebuildConnections() error {
-	rd.mu.Lock()
-	defer rd.mu.Unlock()
-
 	newConns, err := redlock.CreateConnections(rd.ctx, rd.cfg)
 	if err != nil {
 		return err
 	}
 
+	rd.mu.Lock()
 	rd.conns = newConns
+	rd.mu.Unlock()
 
 	var conns []redlock.Conn
 	if rd.mode == agent.OrphanMode {
@@ -118,9 +117,6 @@ func (rd *RedisKVDriver) GetHolder(ctx context.Context, name string, kind string
 }
 
 func (rd *RedisKVDriver) NewMutex(name string, kind string, holder string, ttl time.Duration) Mutex {
-	rd.mu.Lock()
-	defer rd.mu.Unlock()
-
 	if kind == "" {
 		kind = "default"
 	}
@@ -229,12 +225,14 @@ func (rd *RedisKVDriver) SetAgentStatus(status *agent.Status) error {
 
 func (rd *RedisKVDriver) SetOperationMode(mode string) {
 	rd.mu.Lock()
-	defer rd.mu.Unlock()
 
 	if rd.mode == mode {
+		rd.mu.Unlock()
 		return
 	}
+
 	rd.mode = mode
+	rd.mu.Unlock()
 
 	if mode == agent.OrphanMode {
 		conns := []redlock.Conn{rd.conns[rd.cfg.Redis.Primary]}
