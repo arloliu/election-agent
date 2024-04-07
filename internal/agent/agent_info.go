@@ -31,7 +31,7 @@ const (
 type Status struct {
 	State      string
 	Mode       string
-	ZoomEnable bool
+	ZoneEnable bool
 }
 
 type State struct {

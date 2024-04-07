@@ -22,22 +22,18 @@ type KVDriver interface {
 	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
 	NewLease(name string, kind string, holder string, ttl time.Duration) Lease
 	GetHolder(ctx context.Context, name string, kind string) (string, error)
+	RebuildConnections() error
 	Shutdown(ctx context.Context) error
 
-	// GetAgentMode gets agent mode.
-	GetAgentMode() (string, error)
-	// SetAgentMode sets agent mode.
-	SetAgentMode(mode string) error
 	// GetAgentState gets agent state.
 	GetAgentState() (string, error)
-	// SetAgentState sets agent state.
-	SetAgentState(state string) error
-
+	// GetAgentStatus gets the agent status including state, mode and zone enable status
 	GetAgentStatus() (*agent.Status, error)
+	// SetAgentStatus gets the agent status including state, mode and zone enable status
 	SetAgentStatus(status *agent.Status) error
 
-	// SetOpearationMode sets the operation mode by agent mode
-	SetOpearationMode(mode string)
+	// SetOperationMode sets the operation mode by agent mode
+	SetOperationMode(mode string)
 
 	// Ping checks the backend status
 	Ping(ctx context.Context) (int, error)

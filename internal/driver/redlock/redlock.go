@@ -11,15 +11,20 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+const ShuffleConnPoolSize = 10
+
 type RedLock struct {
 	conns  []Conn
 	quorum int
 
-	mu sync.Mutex
+	shuffleConnPool [ShuffleConnPoolSize][]Conn
+	mu              sync.Mutex
 }
 
 func New(conns ...Conn) *RedLock {
-	return &RedLock{conns: conns, quorum: len(conns)/2 + 1}
+	lock := &RedLock{}
+	lock.SetConns(conns)
+	return lock
 }
 
 func (r *RedLock) NewMutex(name string, value string, options ...Option) *Mutex {
@@ -32,21 +37,20 @@ func (r *RedLock) NewMutex(name string, value string, options ...Option) *Mutex 
 		randomValue:   false,
 		driftFactor:   0.01,
 		timeoutFactor: 0.05,
-		quorum:        r.quorum,
-		conns:         r.conns,
+		getConns:      r.GetConns,
 	}
 	for _, opt := range options {
 		opt.Apply(mutex)
 	}
 
-	if mutex.shuffle {
-		clonedConns := make([]Conn, len(r.conns))
-		_ = copy(clonedConns, r.conns)
-		rand.Shuffle(len(clonedConns), func(i, j int) {
-			clonedConns[i], clonedConns[j] = clonedConns[j], clonedConns[i]
-		})
-		mutex.conns = clonedConns
+	opTimeout := time.Duration(int64(float64(mutex.expiry) * mutex.timeoutFactor))
+	if opTimeout < 500*time.Millisecond {
+		opTimeout = 500 * time.Millisecond
+	} else if opTimeout > 1500*time.Millisecond {
+		opTimeout = 1500 * time.Millisecond
 	}
+	mutex.opTimeout = opTimeout
+
 	return mutex
 }
 
@@ -54,7 +58,8 @@ func (r *RedLock) GetConns() ([]Conn, int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return r.conns, r.quorum
+	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
+	return r.shuffleConnPool[idx], r.quorum
 }
 
 func (r *RedLock) SetConns(conns []Conn) {
@@ -63,11 +68,22 @@ func (r *RedLock) SetConns(conns []Conn) {
 
 	r.conns = conns
 	r.quorum = len(r.conns)/2 + 1
+
+	for i := 0; i < ShuffleConnPoolSize; i++ {
+		clonedConns := make([]Conn, len(conns))
+		_ = copy(clonedConns, conns)
+		rand.Shuffle(len(clonedConns), func(i, j int) {
+			clonedConns[i], clonedConns[j] = clonedConns[j], clonedConns[i]
+		})
+
+		r.shuffleConnPool[i] = clonedConns
+	}
 }
 
 func (r *RedLock) Ping(ctx context.Context) (int, error) {
-	return actStatusOpAsync(r.conns, r.quorum, func(conn Conn) (bool, error) {
-		return conn.NewWithContext(ctx).Ping()
+	conns, quorum := r.GetConns()
+	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
+		return conn.WithContext(ctx).Ping()
 	})
 }
 
@@ -76,8 +92,9 @@ func (r *RedLock) Get(ctx context.Context, key string) (string, error) {
 		return "", errors.New("The redis key is empty")
 	}
 
-	_, val, err := actStringOpAsync(r.conns, r.quorum, func(conn Conn) (string, error) {
-		return conn.NewWithContext(ctx).Get(key)
+	conns, quorum := r.GetConns()
+	_, val, err := actStringOpAsync(conns, quorum, func(conn Conn) (string, error) {
+		return conn.WithContext(ctx).Get(key)
 	})
 
 	return val, err
@@ -88,8 +105,9 @@ func (r *RedLock) Set(ctx context.Context, key string, value string) (int, error
 		return 0, errors.New("Set: the key is empty")
 	}
 
-	return actStatusOpAsync(r.conns, r.quorum, func(conn Conn) (bool, error) {
-		return conn.NewWithContext(ctx).Set(key, value)
+	conns, quorum := r.GetConns()
+	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
+		return conn.WithContext(ctx).Set(key, value)
 	})
 }
 
@@ -97,8 +115,10 @@ func (r *RedLock) SetBool(ctx context.Context, key string, value bool) (int, err
 	if key == "" {
 		return 0, errors.New("SetBool: the key for is empty")
 	}
-	return actStatusOpAsync(r.conns, r.quorum, func(conn Conn) (bool, error) {
-		return conn.NewWithContext(ctx).Set(key, BoolStr(value))
+
+	conns, quorum := r.GetConns()
+	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
+		return conn.WithContext(ctx).Set(key, BoolStr(value))
 	})
 }
 
@@ -108,47 +128,48 @@ func (r *RedLock) MGet(ctx context.Context, keys ...string) ([]string, error) {
 		err   error
 	}
 
-	connSzie := len(r.conns)
+	conns, quorum := r.GetConns()
+	connSzie := len(conns)
 
 	ch := make(chan result, connSzie)
-	for _, conn := range r.conns {
+	for _, conn := range conns {
 		go func(conn Conn) {
-			r := result{}
-			r.reply, r.err = conn.NewWithContext(ctx).MGet(keys...)
-			ch <- r
+			rs := result{}
+			rs.reply, rs.err = conn.WithContext(ctx).MGet(keys...)
+			ch <- rs
 		}(conn)
 	}
 
 	n := 0
-	var err error
 	replies := make([][]string, len(keys))
+	var err error
+
 	for i := 0; i < len(keys); i++ {
 		replies[i] = make([]string, connSzie)
 	}
 
 	for i := 0; i < connSzie; i++ {
-		r := <-ch
-		if r.err == nil {
-			for j := 0; j < len(keys); j++ {
-				replies[j][i] = r.reply[j]
-			}
+		rs := <-ch
+		if rs.err == nil {
 			n++
-		} else if r.err != nil {
-			err = multierror.Append(err, r.err)
+			for j := 0; j < len(keys); j++ {
+				if rs.reply[j] != "" {
+					replies[j][i] = rs.reply[j]
+				}
+			}
+		} else {
+			err = multierror.Append(err, rs.err)
 		}
 	}
 
-	// fast fail
-	if n < r.quorum {
+	if n < quorum {
 		return []string{}, fmt.Errorf("Get fails, the number of success operations %d < %d quorum, error: %w", n, r.quorum, err)
 	}
 
 	vals := make([]string, len(keys))
 	for i, reply := range replies {
 		val, n := getMostFreqVal(reply)
-		if n < r.quorum {
-			vals[i] = ""
-		} else {
+		if n >= r.quorum {
 			vals[i] = val
 		}
 	}
@@ -164,8 +185,9 @@ func (r *RedLock) MSet(ctx context.Context, pairs ...any) (int, error) {
 		return 0, errors.New("MSet: the length of pairs is not an odd number")
 	}
 
-	return actStatusOpAsync(r.conns, r.quorum, func(conn Conn) (bool, error) {
-		return conn.NewWithContext(ctx).MSet(pairs...)
+	conns, quorum := r.GetConns()
+	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
+		return conn.WithContext(ctx).MSet(pairs...)
 	})
 }
 
@@ -193,12 +215,12 @@ func actStringOpAsync(conns []Conn, quorum int, actFunc stringFunc) (int, string
 	var err error
 
 	for i := 0; i < connSize; i++ {
-		r := <-ch
-		if r.err == nil {
-			replies = append(replies, r.reply)
+		rs := <-ch
+		if rs.err == nil {
+			replies = append(replies, rs.reply)
 			n++
-		} else if r.err != nil {
-			err = multierror.Append(err, r.err)
+		} else if rs.err != nil {
+			err = multierror.Append(err, rs.err)
 		}
 	}
 
@@ -212,7 +234,7 @@ func actStringOpAsync(conns []Conn, quorum int, actFunc stringFunc) (int, string
 
 type statusFunc func(conn Conn) (bool, error)
 
-func actStatusOpAsync(conns []Conn, quorum int, actFunc statusFunc) (int, error) {
+func actStatusOpAsync(conns []Conn, quorum int, failFast bool, actFunc statusFunc) (int, error) {
 	type result struct {
 		node     int
 		statusOK bool
@@ -224,9 +246,9 @@ func actStatusOpAsync(conns []Conn, quorum int, actFunc statusFunc) (int, error)
 	ch := make(chan result, connSize)
 	for node, conn := range conns {
 		go func(node int, conn Conn) {
-			r := result{node: node}
-			r.statusOK, r.err = actFunc(conn)
-			ch <- r
+			rs := result{node: node}
+			rs.statusOK, rs.err = actFunc(conn)
+			ch <- rs
 		}(node, conn)
 	}
 
@@ -235,24 +257,24 @@ func actStatusOpAsync(conns []Conn, quorum int, actFunc statusFunc) (int, error)
 	var err error
 
 	for i := 0; i < connSize; i++ {
-		r := <-ch
-		if r.statusOK { //nolint:gocritic
+		rs := <-ch
+		if rs.statusOK {
 			n++
-		} else if errors.Is(r.err, ErrLockAlreadyExpired) {
-			err = multierror.Append(err, ErrLockAlreadyExpired)
-		} else if r.err != nil {
-			err = multierror.Append(err, &RedisError{Node: r.node, Err: r.err})
+		} else if rs.err != nil {
+			if errors.Is(rs.err, ErrLockAlreadyExpired) {
+				err = multierror.Append(err, ErrLockAlreadyExpired)
+			} else {
+				err = multierror.Append(err, &RedisError{Node: rs.node, Err: rs.err})
+			}
 		} else {
-			taken = append(taken, r.node)
-			err = multierror.Append(err, &NodeTakenError{Node: r.node})
+			taken = append(taken, rs.node)
+			err = multierror.Append(err, &NodeTakenError{Node: rs.node})
 		}
 
-		if n >= quorum {
-			return n, err
-		}
-
-		if len(taken) >= quorum {
-			return n, &TakenError{Nodes: taken}
+		if failFast {
+			if len(taken) >= quorum {
+				return n, &TakenError{Nodes: taken}
+			}
 		}
 	}
 
@@ -261,7 +283,7 @@ func actStatusOpAsync(conns []Conn, quorum int, actFunc statusFunc) (int, error)
 	}
 
 	if n < quorum {
-		return n, fmt.Errorf("The number of the failed operations %d >= %d quorum, error: %w", n, quorum, err)
+		return n, fmt.Errorf("The number of success operations %d < %d quorum, taken:%d, error: %w", n, quorum, len(taken), err)
 	}
 
 	return n, nil
@@ -332,15 +354,8 @@ func WithTimeoutFactor(factor float64) Option {
 	})
 }
 
-// WithShuffleConns can be used to shuffle Redis connections to reduce centralized access in concurrent scenarios.
-func WithShuffleConns(b bool) Option {
-	return OptionFunc(func(m *Mutex) {
-		m.shuffle = b
-	})
-}
-
 func getMostFreqVal[K comparable](vals []K) (K, int) {
-	freqMap := make(map[K]int)
+	freqMap := make(map[K]int, 1)
 	for _, val := range vals {
 		freqMap[val] += 1
 	}

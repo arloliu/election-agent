@@ -57,7 +57,7 @@ func CreateConnections(ctx context.Context, cfg *config.Config) ([]Conn, error) 
 	return conns, nil
 }
 
-func (c *rueidisConn) NewWithContext(ctx context.Context) Conn {
+func (c *rueidisConn) WithContext(ctx context.Context) Conn {
 	return &rueidisConn{delegate: c.delegate, ctx: ctx}
 }
 

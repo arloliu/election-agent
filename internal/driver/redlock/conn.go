@@ -13,7 +13,7 @@ type RedisPool interface {
 }
 
 type Conn interface {
-	NewWithContext(ctx context.Context) Conn
+	WithContext(ctx context.Context) Conn
 	Get(name string) (string, error)
 	Set(name string, value string) (bool, error)
 	SetNX(name string, value string, expiry time.Duration) (bool, error)

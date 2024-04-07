@@ -189,7 +189,7 @@ func (s *ControlGRPCService) GetStatus(ctx context.Context, req *pb.Empty) (*pb.
 		return &pb.AgentStatus{State: agent.UnavailableState, Mode: agent.UnknownMode}, nil
 	}
 
-	return &pb.AgentStatus{State: st.State, Mode: st.Mode, ZoomEnable: st.ZoomEnable}, nil
+	return &pb.AgentStatus{State: st.State, Mode: st.Mode, ZoneEnable: st.ZoneEnable}, nil
 }
 
 func (s *ControlGRPCService) SetStatus(ctx context.Context, as *pb.AgentStatus) (*pb.BoolValue, error) {
@@ -201,7 +201,7 @@ func (s *ControlGRPCService) SetStatus(ctx context.Context, as *pb.AgentStatus) 
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid mode:%s", as.Mode))
 	}
 
-	err := s.zoneMgr.SetAgentStatus(&agent.Status{State: as.State, Mode: as.Mode, ZoomEnable: as.ZoomEnable})
+	err := s.zoneMgr.SetAgentStatus(&agent.Status{State: as.State, Mode: as.Mode, ZoneEnable: as.ZoneEnable})
 	if err != nil {
 		return &pb.BoolValue{Value: false}, status.Errorf(codes.FailedPrecondition, err.Error())
 	}

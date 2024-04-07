@@ -59,7 +59,7 @@ func TestRedisKVDriver_isRedisUnhealthy(t *testing.T) {
 func TestRedisKVDriver_mocks(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
-	conn := NewMockRedlockConn().NewWithContext(ctx)
+	conn := NewMockRedlockConn().WithContext(ctx)
 
 	ok, err := conn.Set("key1", "val1")
 	require.NoError(err)
@@ -125,8 +125,7 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 
 	n, err := driver.MSet(ctx, "key1", "val1", "key2", "val2")
 	require.NoError(err)
-	// should be equals to quorum because we implement fast return feature
-	require.Equal(len(driver.conns)/2+1, n)
+	require.Equal(len(driver.conns), n)
 
 	vals, err := driver.MGet(ctx, "key1", "key2")
 	require.NoError(err)
@@ -136,7 +135,7 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 
 func connSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
 	for _, conn := range driver.conns {
-		ok, err := conn.NewWithContext(driver.ctx).Set(key, val)
+		ok, err := conn.WithContext(driver.ctx).Set(key, val)
 		require.NoError(err)
 		require.True(ok)
 	}
@@ -158,11 +157,11 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	require.NotNil(driver)
 
 	for _, conn := range driver.conns {
-		result, err := conn.NewWithContext(ctx).Ping()
+		result, err := conn.WithContext(ctx).Ping()
 		require.Error(err)
 		require.False(result)
 
-		ok, err := conn.NewWithContext(ctx).SetNX("test", "value", 10*time.Second)
+		ok, err := conn.WithContext(ctx).SetNX("test", "value", 10*time.Second)
 		require.False(ok)
 		require.Error(err)
 	}
@@ -171,5 +170,5 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	require.NotNil(lease)
 
 	err = lease.Grant(ctx)
-	require.ErrorContains(err, "service unavailable")
+	require.ErrorContains(err, "noneexist")
 }

@@ -107,10 +107,12 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 
 func (s *simulateClient) shutdown() {
 	fmt.Printf("Shutdown %d peers\n", len(s.peers)*numCandidates)
+	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+	defer cancel()
 	for i, peer := range s.peers {
 		for j, c := range peer {
 			if c.active {
-				_, _ = c.client.Resign(s.ctx, resignReqN(i, j))
+				_, _ = c.client.Resign(ctx, resignReqN(i, j))
 			}
 			_ = c.conn.Close()
 		}
@@ -130,6 +132,7 @@ func extendReqN(p int, n int) *eagrpc.ExtendElectedTermRequest {
 		Election: fmt.Sprintf("%s-%d", electionName, p),
 		Leader:   fmt.Sprintf("client-%d-%d", p, n),
 		Term:     int32(electionTerm),
+		Retries:  3,
 	}
 }
 
@@ -298,10 +301,14 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	start := time.Now()
 	// choose active clients and campaign first
 	if err := clients.chooseLeader(); err != nil {
 		return err
 	}
+	elapsed := time.Since(start)
+	rps := float64(numClients) / elapsed.Seconds()
+	fmt.Printf("Campaign %d leaders took %s, %.2f rps\n", numClients, elapsed.String(), rps)
 
 	// start to simluate
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)

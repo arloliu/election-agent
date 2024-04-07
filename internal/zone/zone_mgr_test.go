@@ -57,11 +57,11 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	require.NotNil(m)
 
 	status := &zoneStatus{
-		zoomEnable:    true,
+		zoneEnable:    true,
 		activeZone:    "test-zone2",
 		zcConnected:   true,
 		peerConnected: true,
-		peerStatus:    []*eagrpc.AgentStatus{{State: agent.StandbyState, ZoomEnable: true}},
+		peerStatus:    []*eagrpc.AgentStatus{{State: agent.StandbyState, ZoneEnable: true}},
 		mode:          agent.NormalMode,
 		state:         agent.ActiveState,
 	}
@@ -134,7 +134,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// peer back & peer is active, should be active->standby, orphan->normal
 	status.zcConnected = false
 	status.peerConnected = true
-	status.peerStatus = []*eagrpc.AgentStatus{{State: agent.ActiveState, Mode: agent.NormalMode, ZoomEnable: true}}
+	status.peerStatus = []*eagrpc.AgentStatus{{State: agent.ActiveState, Mode: agent.NormalMode, ZoneEnable: true}}
 	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
@@ -143,7 +143,7 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// peer is disconnected again, should be standby->active, normal->orphan
 	status.zcConnected = false
 	status.peerConnected = false
-	status.peerStatus = []*eagrpc.AgentStatus{{State: agent.ActiveState, Mode: agent.NormalMode, ZoomEnable: true}}
+	status.peerStatus = []*eagrpc.AgentStatus{{State: agent.ActiveState, Mode: agent.NormalMode, ZoneEnable: true}}
 	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.OrphanMode, status.newMode)
@@ -196,30 +196,13 @@ func newMockZoneManager(ctx context.Context, cfg *config.Config) (*mockComponent
 	mockMgr := &MockZoneManager{}
 
 	mockMgr.On("SetPeerStatus", mock.AnythingOfType("*election_agent_v1.AgentStatus")).Return(nil)
-	mockMgr.On("SetAgentState", mock.AnythingOfType("string")).
-		Return(func(state string) error {
-			return m.zm.SetAgentState(state)
-		})
-
-	mockMgr.On("SetAgentMode", mock.AnythingOfType("string")).
-		Return(func(mode string) error {
-			return m.zm.SetAgentMode(mode)
-		})
 
 	mockMgr.On("SetAgentStatus", mock.AnythingOfType("*agent.Status")).
 		Return(func(status *agent.Status) error {
 			return m.zm.SetAgentStatus(status)
 		})
 
-	mockMgr.On("SetOpearationMode", mock.AnythingOfType("string")).Return()
-	mockMgr.On("GetZoomEnable").
-		Return(func() (bool, error) {
-			return m.zm.GetZoomEnable()
-		})
-	mockMgr.On("SetZoomEnable", mock.AnythingOfType("bool")).
-		Return(func(enable bool) error {
-			return m.zm.SetZoomEnable(enable)
-		})
+	mockMgr.On("SetOperationMode", mock.AnythingOfType("string")).Return()
 
 	m.mockZm = mockMgr
 	return &m, nil

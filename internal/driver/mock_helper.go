@@ -17,12 +17,11 @@ import (
 func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
 	conns := []redlock.Conn{NewMockRedlockConn(), NewMockRedlockConn(), NewMockRedlockConn()}
 	driver := &RedisKVDriver{
-		ctx:         context.TODO(),
-		cfg:         cfg,
-		originConns: conns,
-		conns:       conns,
-		rlock:       redlock.New(conns...),
-		hasher:      maphash.NewHasher[string](),
+		ctx:    context.TODO(),
+		cfg:    cfg,
+		conns:  conns,
+		rlock:  redlock.New(conns...),
+		hasher: maphash.NewHasher[string](),
 	}
 
 	return driver
@@ -43,7 +42,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 
 	mockConn := &mockMutexConn{}
 
-	mockConn.On("NewWithContext", mock.Anything).Return(mockConn)
+	mockConn.On("WithContext", mock.Anything).Return(mockConn)
 
 	mockConn.On("Close").Return(nil)
 

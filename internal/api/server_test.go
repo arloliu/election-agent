@@ -37,6 +37,7 @@ func startMockServer(ctx context.Context, cfg *config.Config) (*Server, error) {
 	}
 
 	metricMgr := metric.NewMetricManager(cfg)
+
 	mgr := lease.NewLeaseManager(ctx, cfg, metricMgr, driver)
 
 	var kubeClient kube.KubeClient

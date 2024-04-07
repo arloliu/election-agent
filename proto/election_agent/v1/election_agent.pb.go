@@ -967,7 +967,7 @@ type AgentStatus struct {
 
 	State      string `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
 	Mode       string `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
-	ZoomEnable bool   `protobuf:"varint,3,opt,name=zoom_enable,json=zoomEnable,proto3" json:"zoom_enable,omitempty"`
+	ZoneEnable bool   `protobuf:"varint,3,opt,name=zone_enable,json=zoneEnable,proto3" json:"zone_enable,omitempty"`
 }
 
 func (x *AgentStatus) Reset() {
@@ -1016,9 +1016,9 @@ func (x *AgentStatus) GetMode() string {
 	return ""
 }
 
-func (x *AgentStatus) GetZoomEnable() bool {
+func (x *AgentStatus) GetZoneEnable() bool {
 	if x != nil {
-		return x.ZoomEnable
+		return x.ZoneEnable
 	}
 	return false
 }

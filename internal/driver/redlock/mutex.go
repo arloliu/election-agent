@@ -3,8 +3,11 @@ package redlock
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"math/rand"
 	"time"
+
+	"election-agent/internal/logging"
 
 	cryptorand "crypto/rand"
 )
@@ -30,15 +33,12 @@ type Mutex struct {
 
 	driftFactor   float64
 	timeoutFactor float64
+	opTimeout     time.Duration
+	value         string
+	randomValue   bool
+	until         time.Time
 
-	quorum int
-
-	value       string
-	randomValue bool
-	until       time.Time
-	shuffle     bool
-
-	conns []Conn
+	getConns func() ([]Conn, int)
 }
 
 // Name returns mutex name (i.e. the Redis key).
@@ -104,17 +104,18 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 
 		start := time.Now()
 
+		conns, quorum := m.getConns()
 		n, err := func() (int, error) {
-			ctx, cancel := context.WithTimeout(ctx, time.Duration(int64(float64(m.expiry)*m.timeoutFactor)))
+			ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
 			defer cancel()
-			return actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+			return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
 				return m.acquire(ctx, conn, value)
 			})
 		}()
 
 		now := time.Now()
 		until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
-		if n >= m.quorum && now.Before(until) {
+		if n >= quorum && now.Before(until) {
 			m.value = value
 			m.until = until
 			return nil
@@ -130,10 +131,11 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 
 // UnlockContext unlocks m and returns the status of unlock.
 func (m *Mutex) UnlockContext(ctx context.Context) (bool, error) {
-	n, err := actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+	conns, quorum := m.getConns()
+	n, err := actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
 		return m.release(ctx, conn, m.value)
 	})
-	if n < m.quorum {
+	if n < quorum {
 		return false, err
 	}
 	return true, nil
@@ -142,10 +144,20 @@ func (m *Mutex) UnlockContext(ctx context.Context) (bool, error) {
 // ExtendContext resets the mutex's expiry and returns the status of expiry extension.
 func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 	start := time.Now()
-	n, err := actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
-		return m.touch(ctx, conn, m.value, int(m.expiry/time.Millisecond))
-	})
-	if n < m.quorum {
+	conns, quorum := m.getConns()
+
+	n, err := func() (int, error) {
+		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
+		defer cancel()
+		return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
+			return m.touch(ctx, conn, m.value, int(m.expiry/time.Millisecond))
+		})
+	}()
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logging.Warnw("Mutex.ExtendContext got error", "name", m.name, "value", m.value, "err", err, "n", n, "quorum", quorum, "ttl", int(m.expiry/time.Millisecond))
+	}
+
+	if n < quorum {
 		return false, err
 	}
 	now := time.Now()
@@ -160,10 +172,16 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 // HandoverContext set a new holder of mutex and return the status.
 func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error) {
 	start := time.Now()
-	n, err := actStatusOpAsync(m.conns, m.quorum, func(conn Conn) (bool, error) {
+	conns, quorum := m.getConns()
+
+	n, err := actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return m.handover(ctx, conn, holder, int(m.expiry/time.Millisecond))
 	})
-	if n < m.quorum {
+	if err != nil {
+		logging.Warnw("Mutex.HandoverContext got error", "name", m.name, "holder", holder, "err", err, "n", n, "quorum", quorum, "ttl", int(m.expiry/time.Millisecond))
+	}
+
+	if n < quorum {
 		return false, err
 	}
 

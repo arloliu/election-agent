@@ -121,7 +121,7 @@ service Election {
 message AgentStatus {
   string state = 1;
   string mode = 2;
-  bool zoom_enable = 3;
+  bool zone_enable = 3;
 }
 
 service Control {

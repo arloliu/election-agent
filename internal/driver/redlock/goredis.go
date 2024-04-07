@@ -52,8 +52,9 @@ func CreateConnections(ctx context.Context, cfg *config.Config) ([]Conn, error) 
 	return conns, nil
 }
 
-func (c *goredisConn) NewWithContext(ctx context.Context) Conn {
-	return &goredisConn{delegate: c.delegate, ctx: ctx}
+func (c *goredisConn) WithContext(ctx context.Context) Conn {
+	c.ctx = ctx
+	return c
 }
 
 func (c *goredisConn) Get(name string) (string, error) {
@@ -92,9 +93,8 @@ func (c *goredisConn) Eval(script *Script, keysAndArgs ...interface{}) (interfac
 	return v, noErrNil(err)
 }
 
-func (c *goredisConn) Close(ctx context.Context) error {
-	_, err := c.delegate.Shutdown(ctx).Result()
-	return err
+func (c *goredisConn) Close(_ context.Context) error {
+	return c.delegate.Close()
 }
 
 func (c *goredisConn) Ping() (bool, error) {
