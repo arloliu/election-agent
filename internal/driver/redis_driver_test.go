@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestRedisKVDriver_isRedisUnhealthy(t *testing.T) {
+func TestRedisKVDriver_IsUnhealthy(t *testing.T) {
 	require := require.New(t)
 
 	conns := []redlock.Conn{nil, nil, nil}
@@ -40,20 +40,20 @@ func TestRedisKVDriver_isRedisUnhealthy(t *testing.T) {
 		rlock: redlock.New(conns...),
 	}
 	err := errors.New("error")
-	require.False(rd.isRedisUnhealthy((err)))
+	require.False(rd.IsUnhealthy((err)))
 
 	err = nil
 	for i := 0; i < 2; i++ {
 		err = multierror.Append(err, errors.New("error"))
 	}
-	require.False(rd.isRedisUnhealthy((err)))
+	require.False(rd.IsUnhealthy((err)))
 
 	err = nil
 	err = multierror.Append(err, &net.OpError{})
-	require.False(rd.isRedisUnhealthy((err)))
+	require.False(rd.IsUnhealthy((err)))
 
 	err = multierror.Append(err, &net.OpError{})
-	require.True(rd.isRedisUnhealthy((err)))
+	require.True(rd.IsUnhealthy((err)))
 }
 
 func TestRedisKVDriver_mocks(t *testing.T) {
@@ -166,9 +166,9 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 		require.Error(err)
 	}
 
-	lease := driver.NewLease("test", "", "replica1", 3*time.Second)
-	require.NotNil(lease)
+	mutex := driver.NewMutex("test", "", "replica1", 3*time.Second)
+	require.NotNil(mutex)
 
-	err = lease.Grant(ctx)
+	err = mutex.TryLockContext(ctx)
 	require.ErrorContains(err, "noneexist")
 }

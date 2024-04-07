@@ -7,6 +7,7 @@ import (
 
 	"election-agent/internal/agent"
 	"election-agent/internal/config"
+	"election-agent/internal/driver"
 	"election-agent/internal/metric"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -17,12 +18,12 @@ type LeaseManager struct {
 	cfg       *config.Config
 	state     *agent.State
 	metricMgr *metric.MetricManager
-	driver    KVDriver
+	driver    driver.KVDriver
 	cache     *lru.TwoQueueCache[uint64, Lease]
 	mu        sync.Mutex
 }
 
-func NewLeaseManager(ctx context.Context, cfg *config.Config, metricMgr *metric.MetricManager, driver KVDriver) *LeaseManager {
+func NewLeaseManager(ctx context.Context, cfg *config.Config, metricMgr *metric.MetricManager, drv driver.KVDriver) *LeaseManager {
 	var cache *lru.TwoQueueCache[uint64, Lease]
 	if cfg.Lease.Cache {
 		size := cfg.Lease.CacheSize
@@ -37,7 +38,7 @@ func NewLeaseManager(ctx context.Context, cfg *config.Config, metricMgr *metric.
 		cfg:       cfg,
 		state:     agent.NewState(cfg.DefaultState, cfg.StateCacheTTL),
 		metricMgr: metricMgr,
-		driver:    driver,
+		driver:    drv,
 		cache:     cache,
 	}
 	mgr.state.Store(cfg.DefaultState)
@@ -55,13 +56,17 @@ func (lm *LeaseManager) getLease(name string, kind string, holder string, ttl ti
 		if lease, ok := lm.cache.Get(id); ok {
 			return lease
 		}
-		lease := lm.driver.NewLease(name, kind, holder, ttl)
+		lease := lm.newLease(name, kind, holder, ttl)
 		lm.cache.Add(id, lease)
 
 		return lease
 	}
 
-	return lm.driver.NewLease(name, kind, holder, ttl)
+	return lm.newLease(name, kind, holder, ttl)
+}
+
+func (lm *LeaseManager) newLease(name string, kind string, holder string, ttl time.Duration) Lease {
+	return NewLease(name, kind, holder, ttl, lm.driver)
 }
 
 type GrantLeaseResult struct {
@@ -145,7 +150,7 @@ func (lm *LeaseManager) HandoverLease(ctx context.Context, name string, kind str
 		return
 	}
 
-	lease := lm.driver.NewLease(name, kind, holder, ttl)
+	lease := lm.newLease(name, kind, holder, ttl)
 	err = lease.Handover(ctx, holder)
 	return
 }

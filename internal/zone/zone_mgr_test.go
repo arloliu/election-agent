@@ -169,7 +169,7 @@ type mockComponent struct {
 	zm       ZoneManager
 	mockZm   *MockZoneManager
 	lm       *lease.LeaseManager
-	kvDriver lease.KVDriver
+	kvDriver driver.KVDriver
 }
 
 func newMockZoneManager(ctx context.Context, cfg *config.Config) (*mockComponent, error) {

@@ -30,7 +30,7 @@ func init() {
 
 func main() {
 	var err error
-	var kvDriver lease.KVDriver
+	var kvDriver driver.KVDriver
 
 	ctx := context.Background()
 	cfg := config.GetDefault()

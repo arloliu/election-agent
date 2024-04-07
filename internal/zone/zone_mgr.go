@@ -13,6 +13,7 @@ import (
 
 	"election-agent/internal/agent"
 	"election-agent/internal/config"
+	"election-agent/internal/driver"
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
 	"election-agent/internal/metric"
@@ -43,7 +44,7 @@ type zoneManager struct {
 	ctx         context.Context
 	cfg         *config.Config
 	mode        string
-	driver      lease.KVDriver
+	driver      driver.KVDriver
 	leaseMgr    *lease.LeaseManager
 	ticker      *time.Ticker
 	peerClients []eagrpc.ControlClient
@@ -64,7 +65,7 @@ type zoneStatus struct {
 	peerStatus    []*eagrpc.AgentStatus
 }
 
-func NewZoneManager(ctx context.Context, cfg *config.Config, driver lease.KVDriver, leaseMgr *lease.LeaseManager, metricMgr *metric.MetricManager) (*zoneManager, error) {
+func NewZoneManager(ctx context.Context, cfg *config.Config, driver driver.KVDriver, leaseMgr *lease.LeaseManager, metricMgr *metric.MetricManager) (*zoneManager, error) {
 	mgr := &zoneManager{
 		ctx:         ctx,
 		cfg:         cfg,
@@ -363,7 +364,7 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 
 // Check zone and peers status and set proper agent state and mode.
 // This method is seperated from zoneManager to support unit testing.
-func Check(status *zoneStatus, cfg *config.Config, kvDriver lease.KVDriver, zm ZoneManager, lm *lease.LeaseManager) {
+func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm ZoneManager, lm *lease.LeaseManager) {
 	// only update the local state cache when agent is in the standalone mode
 	if !status.zoneEnable {
 		lm.SetStateCache(status.state)
