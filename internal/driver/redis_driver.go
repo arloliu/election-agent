@@ -227,7 +227,7 @@ func (rd *RedisKVDriver) NewLease(name string, kind string, holder string, ttl t
 			holder,
 			redlock.WithExpiry(ttl),
 			redlock.WithTries(1),
-			redlock.WithTimeoutFactor(0.1),
+			redlock.WithTimeoutFactor(0.2),
 		),
 		driver: rd,
 	}
