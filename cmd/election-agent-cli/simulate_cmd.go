@@ -70,7 +70,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 
 	svcConfig := `{
 		"methodConfig": [{
-			"name": [{"service": "grpc.election_agent.v1.Control"}],
+			"name": [{"service": "grpc.election_agent.v1.Control"}, {"service": "grpc.election_agent.v1.Election"}],
 			"waitForReady": true,
 			"timeout": "10s",
 			"retryPolicy": {
@@ -176,29 +176,16 @@ func (s *simulateClient) chooseLeader() error {
 					continue
 				}
 
-				ret, err := c.client.Campaign(s.ctx, campReqN(i, j))
-
-				switch simState {
-				case agent.ActiveState:
-					if err != nil {
-						return fmt.Errorf("Active candidate should campaign successed (peer: %d, idx: %d), got error: %w", i, j, err)
-					}
-					if !ret.Elected {
-						return fmt.Errorf("Active candidate should campaign successed, (peer: %d, idx: %d), leader: %s", i, j, ret.Leader)
-					}
-				case agent.StandbyState:
-					if err != nil {
-						return fmt.Errorf("Active candidate should campaign fail but not got error (peer: %d, idx: %d), error: %w", i, j, err)
-					}
-					if ret.Elected {
-						return fmt.Errorf("Active candidate should campaign fail (peer: %d, idx: %d), leader: %s", i, j, ret.Leader)
-					}
-				case agent.UnavailableState:
+				var err error
+				for retries := 0; retries < 3; retries++ {
+					err = s.chooseLeaderAction(c.client, i, j, retries)
 					if err == nil {
-						return fmt.Errorf("Active candidate should campaign fail and got error, elected: %t(peer: %d, idx: %d)", ret.Elected, i, j)
-					} else if status.Code(err) != codes.FailedPrecondition {
-						return fmt.Errorf("Active candidate should campaign fail and got unavailable status code (peer: %d, idx: %d), error: %w", i, j, err)
+						break
 					}
+					time.Sleep(200 * time.Millisecond)
+				}
+				if err != nil {
+					return err
 				}
 			}
 
@@ -209,60 +196,52 @@ func (s *simulateClient) chooseLeader() error {
 	return errs.Wait()
 }
 
-func (s *simulateClient) peerCampaign() error { //nolint:cyclop
+func (s *simulateClient) chooseLeaderAction(client eagrpc.ElectionClient, i int, j int, retries int) error {
+	ret, err := client.Campaign(s.ctx, campReqN(i, j))
+	info := fmt.Sprintf("(peer: %d, idx: %d, retries: %d)", i, j, retries)
+
+	switch simState {
+	case agent.ActiveState:
+		if err != nil {
+			return fmt.Errorf("Active candidate should campaign successed %s, got error: %w", info, err)
+		}
+		if !ret.Elected {
+			return fmt.Errorf("Active candidate should campaign successed, %s, leader: %s", info, ret.Leader)
+		}
+	case agent.StandbyState:
+		if err != nil {
+			return fmt.Errorf("Active candidate should campaign fail but not got error %s, error: %w", info, err)
+		}
+		if ret.Elected {
+			return fmt.Errorf("Active candidate should campaign fail %s, leader: %s", info, ret.Leader)
+		}
+	case agent.UnavailableState:
+		if err == nil {
+			return fmt.Errorf("Active candidate should campaign fail and got error, elected: %t %s", ret.Elected, info)
+		} else if status.Code(err) != codes.FailedPrecondition {
+			return fmt.Errorf("Active candidate should campaign fail and got unavailable status code %s, error: %w", info, err)
+		}
+	}
+	return nil
+}
+
+func (s *simulateClient) peerCampaign() error {
 	errs, _ := errgroup.WithContext(s.ctx)
 	for i, peers := range s.peers {
 		i := i
 		peers := peers
 		errs.Go(func() error {
 			for j, c := range peers {
-				if c.active {
-					req := extendReqN(i, j)
-					ret, err := c.client.ExtendElectedTerm(s.ctx, req)
-
-					switch simState {
-					case agent.ActiveState:
-						if err != nil {
-							return fmt.Errorf("Active candidate should extend elected term successed (peer: %d, idx: %d), got error: %w", i, j, err)
-						}
-						if !ret.Value {
-							return fmt.Errorf("Active candidate should extend elected term successed (peer: %d, idx: %d)", i, j)
-						}
-					case agent.StandbyState:
-						if err != nil {
-							return fmt.Errorf("Active candidate should extend elected term fail but not got error (peer: %d, idx: %d), error: %w", i, j, err)
-						} else if ret.Value {
-							return fmt.Errorf("Active candidate should extend elected term fail (peer: %d, idx: %d)", i, j)
-						}
-					case agent.UnavailableState:
-						if err == nil {
-							return fmt.Errorf("Active candidate should extend elected term fail and got error (peer: %d, idx: %d)", i, j)
-						} else if status.Code(err) != codes.FailedPrecondition {
-							return fmt.Errorf("Active candidate should extend elected term fail and got unavailable status code, actual status code: %d (peer: %d, idx: %d)", status.Code(err), i, j)
-						}
+				var err error
+				for retries := 0; retries < 3; retries++ {
+					err = s.peerCampaignAction(c, i, j, retries)
+					if err == nil {
+						break
 					}
-				} else {
-					req := campReqN(i, j)
-					ret, err := c.client.Campaign(s.ctx, req)
-
-					switch simState {
-					case agent.ActiveState:
-						if ret != nil && ret.Elected {
-							return fmt.Errorf("Inactive candidate should campaign term fail (peer: %d, idx: %d), got error: %w", i, j, err)
-						}
-					case agent.StandbyState:
-						if err != nil {
-							return fmt.Errorf("Inactive candidate should campaign fail but not got error (peer: %d, idx: %d), error: %w", i, j, err)
-						} else if ret.Elected {
-							return fmt.Errorf("Inactive candidate should campaign fail (peer: %d, idx: %d)", i, j)
-						}
-					case agent.UnavailableState:
-						if err == nil {
-							return fmt.Errorf("Inactive candidate should campaign term fail and got error (peer: %d, idx: %d)", i, j)
-						} else if status.Code(err) != codes.FailedPrecondition {
-							return fmt.Errorf("Inactive candidate should extend elected term fail and got unavailable status code, actual status code: %d (peer: %d, idx: %d)", status.Code(err), i, j)
-						}
-					}
+					time.Sleep(200 * time.Millisecond)
+				}
+				if err != nil {
+					return err
 				}
 			}
 
@@ -271,6 +250,60 @@ func (s *simulateClient) peerCampaign() error { //nolint:cyclop
 	}
 
 	return errs.Wait()
+}
+
+func (s *simulateClient) peerCampaignAction(c *electionCandidate, i int, j int, retries int) error { //nolint:cyclop
+	info := fmt.Sprintf("(peer: %d, idx: %d, retries: %d)", i, j, retries)
+
+	if c.active {
+		req := extendReqN(i, j)
+		ret, err := c.client.ExtendElectedTerm(s.ctx, req)
+		switch simState {
+		case agent.ActiveState:
+			if err != nil && status.Code(err) != codes.DeadlineExceeded {
+				return fmt.Errorf("Active candidate should extend elected term successed %s, got error: %w", info, err)
+			}
+			if !ret.Value {
+				return fmt.Errorf("Active candidate should extend elected term successed %s", info)
+			}
+		case agent.StandbyState:
+			if err != nil && status.Code(err) != codes.DeadlineExceeded {
+				return fmt.Errorf("Active candidate should extend elected term fail but not got error %s, error: %w", info, err)
+			} else if ret.Value {
+				return fmt.Errorf("Active candidate should extend elected term fail %s", info)
+			}
+		case agent.UnavailableState:
+			if err == nil {
+				return fmt.Errorf("Active candidate should extend elected term fail and got error %s", info)
+			} else if status.Code(err) != codes.FailedPrecondition {
+				return fmt.Errorf("Active candidate should extend elected term fail and got unavailable status code, actual status code: %d %s", status.Code(err), info)
+			}
+		}
+	} else {
+		req := campReqN(i, j)
+		ret, err := c.client.Campaign(s.ctx, req)
+
+		switch simState {
+		case agent.ActiveState:
+			if ret != nil && ret.Elected {
+				return fmt.Errorf("Inactive candidate should campaign term fail %s, got error: %w", info, err)
+			}
+		case agent.StandbyState:
+			if err != nil {
+				return fmt.Errorf("Inactive candidate should campaign fail but not got error %s, error: %w", info, err)
+			} else if ret.Elected {
+				return fmt.Errorf("Inactive candidate should campaign fail %s", info)
+			}
+		case agent.UnavailableState:
+			if err == nil {
+				return fmt.Errorf("Inactive candidate should campaign term fail and got error %s", info)
+			} else if status.Code(err) != codes.FailedPrecondition {
+				return fmt.Errorf("Inactive candidate should extend elected term fail and got unavailable status code, actual status code: %d %s", status.Code(err), info)
+			}
+		}
+	}
+
+	return nil
 }
 
 func simulateClients(cmd *cobra.Command, args []string) error {
