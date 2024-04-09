@@ -88,6 +88,7 @@ func newBenchmarkClient(ctx context.Context, host string, n int) *grpcBenchmarkC
 			Election: fmt.Sprintf("bench_election%d", i),
 			Leader:   fmt.Sprintf("bench_client%d", i),
 			Term:     bench.BenchmarkTTL,
+			Retries:  3,
 		}
 	}
 
