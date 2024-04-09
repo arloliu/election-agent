@@ -132,9 +132,13 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 // UnlockContext unlocks m and returns the status of unlock.
 func (m *Mutex) UnlockContext(ctx context.Context) (bool, error) {
 	conns, quorum := m.getConns()
-	n, err := actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
-		return m.release(ctx, conn, m.value)
-	})
+	n, err := func() (int, error) {
+		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
+		defer cancel()
+		return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
+			return m.release(ctx, conn, m.value)
+		})
+	}()
 	if n < quorum {
 		return false, err
 	}

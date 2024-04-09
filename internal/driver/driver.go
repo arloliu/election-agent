@@ -20,11 +20,16 @@ type Mutex interface {
 
 type KVDriver interface {
 	NewMutex(name string, kind string, holder string, ttl time.Duration) Mutex
-	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
-	GetHolder(ctx context.Context, name string, kind string) (string, error)
+
+	ConnectionCount() int
 	RebuildConnections() error
 	Shutdown(ctx context.Context) error
 	IsUnhealthy(err error) bool
+	// SetOperationMode sets the operation mode by agent mode
+	SetOperationMode(mode string)
+
+	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
+	GetHolder(ctx context.Context, name string, kind string) (string, error)
 
 	// GetAgentState gets agent state.
 	GetAgentState() (string, error)
@@ -32,9 +37,6 @@ type KVDriver interface {
 	GetAgentStatus() (*agent.Status, error)
 	// SetAgentStatus gets the agent status including state, mode and zone enable status
 	SetAgentStatus(status *agent.Status) error
-
-	// SetOperationMode sets the operation mode by agent mode
-	SetOperationMode(mode string)
 
 	// Ping checks the backend status
 	Ping(ctx context.Context) (int, error)

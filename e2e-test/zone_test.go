@@ -241,10 +241,10 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 				t.Fatalf("failed to scale down redis-3 deployment, err:%s", err.Error())
 			}
 
-			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.UnknownMode); err != nil {
+			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.NormalMode); err != nil {
 				t.Fatal(err.Error())
 			}
-			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.UnavailableState, agent.UnknownMode); err != nil {
+			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.UnavailableState, agent.NormalMode); err != nil {
 				t.Fatal(err.Error())
 			}
 
@@ -294,10 +294,10 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 				t.Fatalf("failed to scale down redis-2 deployment, err:%s", err.Error())
 			}
 
-			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.UnknownMode); err != nil {
+			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.NormalMode); err != nil {
 				t.Fatal(err.Error())
 			}
-			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.UnavailableState, agent.UnknownMode); err != nil {
+			if err := agentStatusIs(ctx, cfg, z2AgentName, agent.UnavailableState, agent.NormalMode); err != nil {
 				t.Fatal(err.Error())
 			}
 

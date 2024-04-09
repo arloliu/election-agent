@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -29,9 +30,38 @@ const (
 )
 
 type Status struct {
+	mu         sync.Mutex
 	State      string
 	Mode       string
 	ZoneEnable bool
+}
+
+func (s *Status) Store(status *Status) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	val := status.Load()
+	s.State = val.State
+	s.Mode = val.Mode
+	s.ZoneEnable = val.ZoneEnable
+}
+
+func (s *Status) Load() Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return Status{State: s.State, Mode: s.Mode, ZoneEnable: s.ZoneEnable}
+}
+
+// local agent status instance
+var localStatus Status = Status{State: UnavailableState, Mode: UnknownMode, ZoneEnable: false}
+
+func SetLocalStatus(status *Status) {
+	localStatus.Store(status)
+}
+
+func GetLocalStatus() Status {
+	return localStatus.Load()
 }
 
 type State struct {

@@ -184,11 +184,7 @@ func newControlGRPCService(cfg *config.Config, leaseMgr *lease.LeaseManager, zon
 }
 
 func (s *ControlGRPCService) GetStatus(ctx context.Context, req *pb.Empty) (*pb.AgentStatus, error) {
-	st, err := s.zoneMgr.GetAgentStatus()
-	if err != nil {
-		return &pb.AgentStatus{State: agent.UnavailableState, Mode: agent.UnknownMode}, nil
-	}
-
+	st := agent.GetLocalStatus()
 	return &pb.AgentStatus{State: st.State, Mode: st.Mode, ZoneEnable: st.ZoneEnable}, nil
 }
 

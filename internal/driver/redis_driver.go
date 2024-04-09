@@ -79,6 +79,11 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 	return inst, err
 }
 
+func (rd *RedisKVDriver) ConnectionCount() int {
+	conns, _ := rd.rlock.GetConns()
+	return len(conns)
+}
+
 func (rd *RedisKVDriver) RebuildConnections() error {
 	newConns, err := redlock.CreateConnections(rd.ctx, rd.cfg)
 	if err != nil {
