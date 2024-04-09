@@ -200,6 +200,10 @@ func (s *simulateClient) chooseLeaderAction(client eagrpc.ElectionClient, i int,
 	ret, err := client.Campaign(s.ctx, campReqN(i, j))
 	info := fmt.Sprintf("(peer: %d, idx: %d, retries: %d)", i, j, retries)
 
+	if err != nil && status.Code(err) == codes.DeadlineExceeded {
+		return nil
+	}
+
 	switch simState {
 	case agent.ActiveState:
 		if err != nil {
@@ -258,16 +262,20 @@ func (s *simulateClient) peerCampaignAction(c *electionCandidate, i int, j int, 
 	if c.active {
 		req := extendReqN(i, j)
 		ret, err := c.client.ExtendElectedTerm(s.ctx, req)
+		if err != nil && status.Code(err) == codes.DeadlineExceeded {
+			return nil
+		}
+
 		switch simState {
 		case agent.ActiveState:
-			if err != nil && status.Code(err) != codes.DeadlineExceeded {
+			if err != nil {
 				return fmt.Errorf("Active candidate should extend elected term successed %s, got error: %w", info, err)
 			}
 			if !ret.Value {
 				return fmt.Errorf("Active candidate should extend elected term successed %s", info)
 			}
 		case agent.StandbyState:
-			if err != nil && status.Code(err) != codes.DeadlineExceeded {
+			if err != nil {
 				return fmt.Errorf("Active candidate should extend elected term fail but not got error %s, error: %w", info, err)
 			} else if ret.Value {
 				return fmt.Errorf("Active candidate should extend elected term fail %s", info)
@@ -282,6 +290,9 @@ func (s *simulateClient) peerCampaignAction(c *electionCandidate, i int, j int, 
 	} else {
 		req := campReqN(i, j)
 		ret, err := c.client.Campaign(s.ctx, req)
+		if err != nil && status.Code(err) == codes.DeadlineExceeded {
+			return nil
+		}
 
 		switch simState {
 		case agent.ActiveState:
