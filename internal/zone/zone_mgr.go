@@ -50,7 +50,6 @@ type zoneManager struct {
 }
 
 type zoneStatus struct {
-	zoneEnable    bool
 	zcConnected   bool
 	peerConnected bool
 	activeZone    string
@@ -72,7 +71,8 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver driver.KVDri
 	}
 
 	if !cfg.Zone.Enable {
-		agent.SetLocalStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode, ZoneEnable: false})
+		agent.SetLocalStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode})
+		mgr.leaseMgr.SetStateCache(agent.ActiveState)
 		return mgr, nil
 	}
 
@@ -110,17 +110,18 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver driver.KVDri
 		logging.Warn("Initial zone manager in unavailable state")
 	}
 
-	// initial status when the default setting of zone is enabled
-	if mgr.cfg.Zone.Enable {
-		mgr.cfg.Zone.Enable = curStatus.ZoneEnable
-		agent.SetLocalStatus(&agent.Status{State: curStatus.State, Mode: curStatus.Mode, ZoneEnable: curStatus.ZoneEnable})
-		mgr.leaseMgr.SetStateCache(curStatus.State)
-	}
+	// initial local status and local state cache
+	agent.SetLocalStatus(&agent.Status{State: curStatus.State, Mode: curStatus.Mode})
+	mgr.leaseMgr.SetStateCache(curStatus.State)
 
 	return mgr, nil
 }
 
 func (zm *zoneManager) Start() error {
+	if !zm.cfg.Zone.Enable {
+		return nil
+	}
+
 	zm.ticker = time.NewTicker(zm.cfg.Zone.CheckInterval)
 	go func() {
 		for {
@@ -150,10 +151,6 @@ func (zm *zoneManager) Shutdown(ctx context.Context) error {
 }
 
 func (zm *zoneManager) GetActiveZone() (string, error) {
-	if !zm.cfg.Zone.Enable {
-		return zm.cfg.Zone.Name, nil
-	}
-
 	ctx, cancel := context.WithTimeout(zm.ctx, zm.cfg.Zone.CheckTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zm.cfg.Zone.CoordinatorURL, nil)
@@ -234,7 +231,7 @@ func (zm *zoneManager) SetPeerStatus(status *eagrpc.AgentStatus) error {
 					"zone", zm.cfg.Zone.Name,
 					"mode", status.Mode,
 					"state", status.State,
-					"zone_enable", status.ZoneEnable,
+					"zone_enable", zm.cfg.Zone.Enable,
 					"err", err,
 				)
 				return err
@@ -309,7 +306,7 @@ func (zm *zoneManager) checkDisconectedBackends() int {
 
 func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	var err error
-	status := &zoneStatus{zoneEnable: zm.cfg.Zone.Enable, mode: agent.UnknownMode, zcConnected: false, peerConnected: true}
+	status := &zoneStatus{mode: agent.UnknownMode, zcConnected: false, peerConnected: true}
 
 	disconectedBackends := zm.checkDisconectedBackends()
 	if disconectedBackends == 0 {
@@ -333,11 +330,6 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	}
 	status.state = kvStatus.State
 	status.mode = kvStatus.Mode
-	status.zoneEnable = kvStatus.ZoneEnable
-
-	if !status.zoneEnable {
-		return status
-	}
 
 	status.activeZone, err = zm.GetActiveZone()
 	if err == nil || status.activeZone != "" {
@@ -364,13 +356,6 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 // Check zone and peers status and set proper agent state and mode.
 // This method is seperated from zoneManager to support unit testing.
 func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm ZoneManager, lm *lease.LeaseManager) {
-	// only update the local status and state cache when agent is in the standalone mode
-	if !status.zoneEnable {
-		agent.SetLocalStatus(&agent.Status{State: status.state, Mode: status.mode, ZoneEnable: false})
-		lm.SetStateCache(status.state)
-		return
-	}
-
 	var err error
 
 	if status.zcConnected {
@@ -435,7 +420,7 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm 
 		"state", status.state, "newState", status.newState, "mode", status.mode, "newMode", status.newMode,
 		"hostname", os.Getenv("HOSTNAME"),
 	)
-	err = zm.SetAgentStatus(&agent.Status{State: status.newState, Mode: status.newMode, ZoneEnable: status.zoneEnable})
+	err = zm.SetAgentStatus(&agent.Status{State: status.newState, Mode: status.newMode})
 	if err != nil {
 		logging.Errorw("Failed to update agent status",
 			"agent", cfg.Name,
@@ -450,7 +435,7 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm 
 
 	// 3. notify agent peers to enter standby mode if this agent becomes active one
 	if status.newState == agent.ActiveState && status.peerConnected {
-		err := zm.SetPeerStatus(&eagrpc.AgentStatus{State: agent.StandbyState, Mode: agent.NormalMode, ZoneEnable: true})
+		err := zm.SetPeerStatus(&eagrpc.AgentStatus{State: agent.StandbyState, Mode: agent.NormalMode})
 		if err != nil {
 			logging.Errorw("Failed to notify agent peers to enter standby mode",
 				"agent", cfg.Name,
@@ -461,7 +446,7 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm 
 	}
 
 	logging.Debugw("Zone status",
-		"zoneEnable", status.zoneEnable,
+		"zoneEnable", cfg.Zone.Enable,
 		"zcConnected", status.zcConnected,
 		"peerConnected", status.peerConnected,
 		"state", status.state+"->"+status.newState,

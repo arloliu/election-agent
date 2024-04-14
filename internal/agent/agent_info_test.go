@@ -33,21 +33,18 @@ func TestAgentInfo_State(t *testing.T) {
 func TestAgentInfo_Status(t *testing.T) {
 	require := require.New(t)
 	s := Status{}
-	ns := &Status{State: ActiveState, Mode: NormalMode, ZoneEnable: true}
+	ns := &Status{State: ActiveState, Mode: NormalMode}
 	s.Store(ns)
 	sl := s.Load()
 	require.Equal(ActiveState, sl.State)
 	require.Equal(NormalMode, sl.Mode)
-	require.True(sl.ZoneEnable)
 
 	sl = GetLocalStatus()
 	require.Equal(UnavailableState, sl.State)
 	require.Equal(UnknownMode, sl.Mode)
-	require.False(sl.ZoneEnable)
 
 	SetLocalStatus(ns)
 	sl = GetLocalStatus()
 	require.Equal(ActiveState, sl.State)
 	require.Equal(NormalMode, sl.Mode)
-	require.True(sl.ZoneEnable)
 }

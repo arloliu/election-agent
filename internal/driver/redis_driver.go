@@ -174,29 +174,19 @@ func (rd *RedisKVDriver) SetAgentMode(mode string) error {
 }
 
 func (rd *RedisKVDriver) GetAgentStatus() (*agent.Status, error) {
-	status := &agent.Status{State: agent.UnavailableState, Mode: agent.UnknownMode, ZoneEnable: false}
-	replies, err := rd.MGet(rd.ctx, rd.stateKey, rd.modeKey, rd.zoneEnableKey)
-	if err != nil || len(replies) != 3 {
-		status.ZoneEnable = rd.cfg.Zone.Enable
-		logging.Debugw("driver: GetAgentStatus got error", "state", status.State, "mode", status.Mode, "zoneEnable", status.ZoneEnable, "error", err)
+	status := &agent.Status{State: agent.UnavailableState, Mode: agent.UnknownMode}
+	replies, err := rd.MGet(rd.ctx, rd.stateKey, rd.modeKey)
+	if err != nil || len(replies) != 2 {
+		logging.Debugw("driver: GetAgentStatus got error", "state", status.State, "mode", status.Mode, "error", err)
 		return status, nil
 	}
 
-	// set default zoom enable settting when the zoom enable value is empty
-	var zoneEnable bool
-	if replies[2] == "" {
-		zoneEnable = rd.cfg.Zone.Enable
-	} else {
-		zoneEnable = redlock.IsBoolStrTrue(replies[2])
-	}
 	if !rd.cfg.Zone.Enable {
 		status.State = rd.cfg.DefaultState
 		status.Mode = agent.NormalMode
-		status.ZoneEnable = false
 	} else {
 		status.State = replies[0]
 		status.Mode = replies[1]
-		status.ZoneEnable = zoneEnable
 	}
 
 	if status.State == agent.UnavailableState || status.State == "" {
@@ -224,7 +214,7 @@ func (rd *RedisKVDriver) SetAgentStatus(status *agent.Status) error {
 		return nil
 	}
 
-	_, err := rd.MSet(rd.ctx, rd.stateKey, status.State, rd.modeKey, status.Mode, rd.zoneEnableKey, status.ZoneEnable)
+	_, err := rd.MSet(rd.ctx, rd.stateKey, status.State, rd.modeKey, status.Mode)
 	return err
 }
 

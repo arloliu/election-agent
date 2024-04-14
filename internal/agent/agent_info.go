@@ -30,10 +30,9 @@ const (
 )
 
 type Status struct {
-	mu         sync.Mutex
-	State      string
-	Mode       string
-	ZoneEnable bool
+	mu    sync.Mutex
+	State string
+	Mode  string
 }
 
 func (s *Status) Store(status *Status) {
@@ -43,18 +42,17 @@ func (s *Status) Store(status *Status) {
 	val := status.Load()
 	s.State = val.State
 	s.Mode = val.Mode
-	s.ZoneEnable = val.ZoneEnable
 }
 
 func (s *Status) Load() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return Status{State: s.State, Mode: s.Mode, ZoneEnable: s.ZoneEnable}
+	return Status{State: s.State, Mode: s.Mode}
 }
 
 // local agent status instance
-var localStatus Status = Status{State: UnavailableState, Mode: UnknownMode, ZoneEnable: false}
+var localStatus Status = Status{State: UnavailableState, Mode: UnknownMode}
 
 func SetLocalStatus(status *Status) {
 	localStatus.Store(status)

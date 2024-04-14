@@ -114,7 +114,7 @@ func getStatus(cmd *cobra.Command, args []string) error {
 var setStatusCmd = &cobra.Command{
 	Use:   "set-status <state> <mode> [zone_enable]",
 	Short: "Set election agent status",
-	Long:  "Set election agent status\nArgument format:\n  <state>: active|standby\n  <mode>: normal|orphan\n  [zone_enable]: true|false|1|0, defaults to true",
+	Long:  "Set election agent status\nArgument format:\n  <state>: active|standby\n  <mode>: normal|orphan\n",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  setStatus,
 }
@@ -130,21 +130,14 @@ func setStatus(cmd *cobra.Command, args []string) error {
 	if !slices.Contains(agent.ValidModes, args[1]) {
 		return fmt.Errorf("invalid mode %s", args[1])
 	}
-	zoneEnable := true
-	if len(args) >= 3 {
-		if args[2] == "false" || args[2] == "0" {
-			zoneEnable = false
-		}
-	}
 
 	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
 	req := &eagrpc.AgentStatus{
-		State:      args[0],
-		Mode:       args[1],
-		ZoneEnable: zoneEnable,
+		State: args[0],
+		Mode:  args[1],
 	}
 	result, err := client.Control.SetStatus(ctx, req)
 	if err != nil {

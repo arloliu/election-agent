@@ -16,7 +16,7 @@ func Test_marshalJSON(t *testing.T) {
 
 	data := make([]protoreflect.ProtoMessage, 3)
 	for i := 0; i < 3; i++ {
-		data[i] = &eagrpc.AgentStatus{State: agent.ActiveState, Mode: agent.NormalMode, ZoneEnable: true}
+		data[i] = &eagrpc.AgentStatus{State: agent.ActiveState, Mode: agent.NormalMode}
 	}
 
 	ret, err := marshalJSON(data)
@@ -31,6 +31,5 @@ func Test_marshalJSON(t *testing.T) {
 	for _, status := range statues {
 		require.Equal(agent.ActiveState, status.State)
 		require.Equal(agent.NormalMode, status.Mode)
-		require.True(status.ZoneEnable)
 	}
 }
