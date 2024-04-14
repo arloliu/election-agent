@@ -148,8 +148,14 @@ type ZoneConfig struct {
 	// The zone coordinator's url.
 	CoordinatorURL string `split_words:"true" yaml:"coordinator_url"`
 	// The request timeout of zone coordinator.
-	// Defaults to `1s`.
-	CoordinatorTimeout time.Duration `default:"1s" split_words:"true" yaml:"coordinator_timeout"`
+	// Defaults to `3s`.
+	CoordinatorTimeout time.Duration `default:"3s" split_words:"true" yaml:"coordinator_timeout"`
+	// The TTL condition for maintaining zone coordinator connected status.
+	// The zone manager will maintain the coordinator's connected status if it can retrieve the active zone name within the TTL.
+	// e.g., If this value is set to 60s, the zone manager will report the zone coordinator as connected when it both
+	// establishes a connection and retrieves the active zone name within 60 seconds.
+	// Defaults to `60s`.
+	CoordinatorTTL time.Duration `default:"60s" split_words:"true" yaml:"coordinator_ttl"`
 
 	// A list of election agent peer gRPC URLs.
 	PeerURLs []string `envconfig:"EA_ZONE_PEER_URLS" yaml:"peer_urls"`

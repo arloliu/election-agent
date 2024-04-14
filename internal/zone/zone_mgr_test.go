@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"election-agent/internal/agent"
 	"election-agent/internal/config"
@@ -12,6 +13,7 @@ import (
 	"election-agent/internal/lease"
 	"election-agent/internal/logging"
 	"election-agent/internal/metric"
+	"election-agent/internal/zc"
 	eagrpc "election-agent/proto/election_agent/v1"
 
 	mock "github.com/stretchr/testify/mock"
@@ -157,6 +159,77 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	updateStatus(status)
 }
 
+func TestZoneManager_ActiveZone(t *testing.T) {
+	require := require.New(t)
+
+	ctx := context.TODO()
+
+	zcServer := zc.NewServer(10900, "z1")
+	require.NotNil(zcServer)
+
+	go func() {
+		_ = zcServer.Start()
+	}()
+	defer func() {
+		_ = zcServer.Shutdown(ctx)
+	}()
+
+	zcTTL := 500 * time.Millisecond
+	cfg := &config.Config{
+		Name:         "test-election-agent",
+		DefaultState: "active",
+		KeyPrefix:    "test_agent",
+		Redis:        config.RedisConfig{},
+		GRPC:         config.GRPCConfig{Enable: false},
+		HTTP:         config.HTTPConfig{Enable: false},
+		Metric:       config.MetricConfig{Enable: false},
+		Zone: config.ZoneConfig{
+			Enable:             true,
+			Name:               "test-zone1",
+			CoordinatorURL:     "http://localhost:10900",
+			CoordinatorTimeout: time.Second,
+			CoordinatorTTL:     zcTTL,
+			PeerURLs:           []string{"fake_peer"},
+		},
+	}
+
+	m, err := newMockZoneManager(ctx, cfg)
+	require.NoError(err)
+	require.NotNil(m)
+	require.NotNil(m.zm)
+
+	zm := m.zm
+	for i := 0; i < 10; i++ {
+		activeZone, connected := zm.getActiveZone()
+		if connected {
+			require.Equal("z1", activeZone)
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	for i := 0; i < 10; i++ {
+		activeZone, connected, rawConnected := zm.checkActiveZone()
+		require.Equal("z1", activeZone)
+		require.True(connected)
+		require.True(rawConnected)
+	}
+
+	err = zcServer.Shutdown(ctx)
+	require.NoError(err)
+
+	activeZone, connected, rawConnected := zm.checkActiveZone()
+	require.Equal("z1", activeZone)
+	require.True(connected)
+	require.False(rawConnected)
+
+	time.Sleep(zcTTL)
+	activeZone, connected, rawConnected = zm.checkActiveZone()
+	require.Equal("z1", activeZone)
+	require.False(connected)
+	require.False(rawConnected)
+}
+
 func updateStatus(status *zoneStatus) {
 	status.state = status.newState
 	status.mode = status.newMode
@@ -165,7 +238,7 @@ func updateStatus(status *zoneStatus) {
 }
 
 type mockComponent struct {
-	zm       ZoneManager
+	zm       *zoneManager
 	mockZm   *MockZoneManager
 	lm       *lease.LeaseManager
 	kvDriver driver.KVDriver

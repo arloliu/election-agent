@@ -28,8 +28,6 @@ import (
 type ZoneManager interface {
 	Start() error
 	Shutdown(ctx context.Context) error
-	GetActiveZone() (string, error)
-	GetPeerStatus() ([]*eagrpc.AgentStatus, error)
 	SetPeerStatus(status *eagrpc.AgentStatus) error
 	SetAgentStatus(status *agent.Status) error
 	SetOperationMode(mode string)
@@ -38,15 +36,17 @@ type ZoneManager interface {
 var _ ZoneManager = (*zoneManager)(nil)
 
 type zoneManager struct {
-	ctx         context.Context
-	cfg         *config.Config
-	driver      driver.KVDriver
-	leaseMgr    *lease.LeaseManager
-	ticker      *time.Ticker
-	peerClients []eagrpc.ControlClient
-	zcClient    *http.Client
-	metricMgr   *metric.MetricManager
-	reconnected bool
+	ctx           context.Context
+	cfg           *config.Config
+	driver        driver.KVDriver
+	leaseMgr      *lease.LeaseManager
+	ticker        *time.Ticker
+	peerClients   []eagrpc.ControlClient
+	zcClient      *http.Client
+	zcLastUpdated time.Time
+	activeZone    string
+	metricMgr     *metric.MetricManager
+	reconnected   bool
 }
 
 type zoneStatus struct {
@@ -150,31 +150,46 @@ func (zm *zoneManager) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (zm *zoneManager) GetActiveZone() (string, error) {
-	ctx, cancel := context.WithTimeout(zm.ctx, zm.cfg.Zone.CheckTimeout)
+func (zm *zoneManager) checkActiveZone() (string, bool, bool) {
+	var connected bool
+	zm.activeZone, connected = zm.getActiveZone()
+	if connected {
+		zm.zcLastUpdated = time.Now()
+		return zm.activeZone, true, true
+	}
+
+	if time.Since(zm.zcLastUpdated) < zm.cfg.Zone.CoordinatorTTL {
+		return zm.activeZone, true, false
+	}
+
+	return zm.activeZone, false, false
+}
+
+func (zm *zoneManager) getActiveZone() (string, bool) {
+	ctx, cancel := context.WithTimeout(zm.ctx, zm.cfg.Zone.CoordinatorTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zm.cfg.Zone.CoordinatorURL, nil)
 	if err != nil {
-		return "", err
+		return zm.activeZone, false
 	}
 	req.Header.Add("Content-Type", "text/plain")
 	req.Header.Add("User-Agent", "Election Agent")
 
 	resp, err := zm.zcClient.Do(req)
-	if err != nil {
-		return "", err
+	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
+		return zm.activeZone, false
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return zm.activeZone, false
 	}
 	defer resp.Body.Close()
 
-	return string(body), nil
+	return string(body), true
 }
 
-func (zm *zoneManager) GetPeerStatus() ([]*eagrpc.AgentStatus, error) {
+func (zm *zoneManager) getPeerStatus() ([]*eagrpc.AgentStatus, error) {
 	var mu sync.Mutex
 	statuses := make([]*eagrpc.AgentStatus, 0, len(zm.peerClients))
 	eg := errgroup.Group{}
@@ -331,23 +346,21 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	status.state = kvStatus.State
 	status.mode = kvStatus.Mode
 
-	status.activeZone, err = zm.GetActiveZone()
-	if err == nil || status.activeZone != "" {
-		status.zcConnected = true
-	}
+	var rawZCConnected bool
+	status.activeZone, status.zcConnected, rawZCConnected = zm.checkActiveZone()
 
-	status.peerStatus, _ = zm.GetPeerStatus()
+	status.peerStatus, _ = zm.getPeerStatus()
 	if len(status.peerStatus) == 0 {
 		status.peerConnected = false
 	}
 
 	if zm.metricMgr.Enabled() {
 		// check and set metrics in goroutine to prevent getZoneStatus from taking too long to execute
-		go func(peerConnected int, zcConnected bool) {
+		go func(peerConnected int, rawZCConnected bool) {
 			zm.metricMgr.SetDisconnectedRedisBackends(disconectedBackends)
 			zm.metricMgr.SetDisconnectedPeers(len(zm.cfg.Zone.PeerURLs) - peerConnected)
-			zm.metricMgr.IsZCConnected(zcConnected)
-		}(len(status.peerStatus), status.zcConnected)
+			zm.metricMgr.IsZCConnected(rawZCConnected)
+		}(len(status.peerStatus), rawZCConnected)
 	}
 
 	return status

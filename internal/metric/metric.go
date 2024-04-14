@@ -125,6 +125,7 @@ func (m *MetricManager) IncAgentUnavailableState() {
 	m.agentUnavails.Inc()
 }
 
+// IsZCConnected reports the real connection status of zone coordinator instead of cached status
 func (m *MetricManager) IsZCConnected(connected bool) {
 	if !m.cfg.Metric.Enable {
 		return
