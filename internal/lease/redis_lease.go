@@ -21,10 +21,6 @@ type RedisLease struct {
 var _ Lease = (*RedisLease)(nil)
 
 func NewLease(name string, kind string, holder string, ttl time.Duration, drv driver.KVDriver) Lease {
-	if kind == "" {
-		kind = "default"
-	}
-
 	lease := &RedisLease{
 		id:     drv.LeaseID(name, kind, holder, ttl),
 		kind:   kind,

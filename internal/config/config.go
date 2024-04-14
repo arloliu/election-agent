@@ -62,6 +62,13 @@ func (cfg *Config) AgentInfoKey(field string) string {
 	return cfg.KeyPrefix + "/info/" + cfg.Name + "/" + field
 }
 
+func (cfg *Config) LeaseKey(lease string, kind string) string {
+	if kind == "" {
+		kind = "default"
+	}
+	return cfg.KeyPrefix + "/lease/" + kind + "/" + lease
+}
+
 // Kubernetes related settings
 type KubeConfig struct {
 	Enable bool `default:"true" yaml:"enable"` // Whether to enable k8s service. Defaults to `true`.
@@ -129,10 +136,6 @@ type ZoneConfig struct {
 	Enable bool `default:"false" yaml:"enable"`
 	// The name of zone where the election agent resides.
 	Name string `yaml:"name"`
-	// StateKeyPrefix specifies the key prefix of state that election agent stores in the backend.
-	// The full key name will be: `<Zone.StateKeyPrefix>/<Name>`
-	// Defaults to `ela_state`.
-	StateKeyPrefix string `default:"ela_state" split_words:"true" yaml:"state_key_prefix"`
 
 	// The zone health check interval.
 	// Defaults to `1s`.

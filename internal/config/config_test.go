@@ -161,7 +161,6 @@ func verifyConfig(t *testing.T) {
 
 	require.True(cfg.Zone.Enable)
 	require.Equal("zone1", cfg.Zone.Name)
-	require.Equal("test", cfg.Zone.StateKeyPrefix)
 	require.Equal(time.Second, cfg.Zone.CheckInterval)
 	require.Equal(time.Second, cfg.Zone.CheckTimeout)
 	require.Equal("localhost:9000", cfg.Zone.CoordinatorURL)

@@ -105,29 +105,18 @@ func (rd *RedisKVDriver) RebuildConnections() error {
 }
 
 func (rd *RedisKVDriver) LeaseID(name string, kind string, holder string, ttl time.Duration) uint64 {
-	if kind == "" {
-		kind = "default"
-	}
-	return rd.hasher.Hash(name + kind + holder + strconv.FormatInt(int64(ttl), 16))
+	return rd.hasher.Hash(rd.cfg.LeaseKey(name, kind) + holder + strconv.FormatInt(int64(ttl), 16))
 }
 
 func (rd *RedisKVDriver) GetHolder(ctx context.Context, name string, kind string) (string, error) {
-	if kind == "" {
-		kind = "default"
-	}
-	key := rd.leaseKey(name, kind)
 	ctx, cancel := context.WithTimeout(ctx, rd.cfg.Redis.OpearationTimeout)
 	defer cancel()
-	return rd.rlock.Get(ctx, key)
+	return rd.rlock.Get(ctx, rd.cfg.LeaseKey(name, kind))
 }
 
 func (rd *RedisKVDriver) NewMutex(name string, kind string, holder string, ttl time.Duration) Mutex {
-	if kind == "" {
-		kind = "default"
-	}
-
 	return rd.rlock.NewMutex(
-		rd.leaseKey(name, kind),
+		rd.cfg.LeaseKey(name, kind),
 		holder,
 		redlock.WithExpiry(ttl),
 		redlock.WithTries(1),
@@ -285,13 +274,6 @@ func (rd *RedisKVDriver) MSet(ctx context.Context, pairs ...any) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, rd.cfg.Redis.OpearationTimeout)
 	defer cancel()
 	return rd.rlock.MSet(ctx, pairs...)
-}
-
-func (rd *RedisKVDriver) leaseKey(lease string, kind string) string {
-	if kind == "" {
-		kind = "default"
-	}
-	return rd.cfg.KeyPrefix + "/lease/" + kind + "/" + lease
 }
 
 func (rd *RedisKVDriver) IsUnhealthy(err error) bool {
