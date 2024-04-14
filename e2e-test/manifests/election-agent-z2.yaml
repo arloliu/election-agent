@@ -52,6 +52,8 @@ spec:
               value: election-agent-z1:443
             - name: EA_ZONE_COORDINATOR_URL
               value: http://zone-coordinator
+            - name: EA_ZONE_COORDINATOR_TTL
+              value: 5s
 
             - name: EA_REDIS_MODE
               value: single
