@@ -1,6 +1,6 @@
 module election-agent
 
-go 1.21.0
+go 1.22.0
 
 require (
 	github.com/KimMachineGun/automemlimit v0.5.0

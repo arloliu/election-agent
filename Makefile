@@ -46,23 +46,23 @@ SUMMARY_COVER_PROFILE      := $(COVER_ROOT)/summary.out
 
 # Programs
 run:
-	@GOEXPERIMENT=loopvar go run -tags $(BUILD_TAGS)  ./cmd/election-agent
+	go run -tags $(BUILD_TAGS)  ./cmd/election-agent
 
 run-zone-coordinator:
-	@GOEXPERIMENT=loopvar go run ./cmd/zone-coordinator
+	go run ./cmd/zone-coordinator
 
 # Build
 build-election-agent: $(ALL_SRC)
 	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
-	GOEXPERIMENT=loopvar CGO_ENABLED=$(CGO_ENABLED) go build -tags $(BUILD_TAGS) $(LDFLAGS) -o election-agent ./cmd/election-agent
+	CGO_ENABLED=$(CGO_ENABLED) go build -tags $(BUILD_TAGS) $(LDFLAGS) -o election-agent ./cmd/election-agent
 
 build-election-agent-cli: $(ALL_SRC)
 	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
-	GOEXPERIMENT=loopvar CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -o election-agent-cli ./cmd/election-agent-cli
+	CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -o election-agent-cli ./cmd/election-agent-cli
 
 build-zone-coordinator: $(ALL_SRC)
 	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
-	GOEXPERIMENT=loopvar CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -o zone-coordinator ./cmd/zone-coordinator
+	CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -o zone-coordinator ./cmd/zone-coordinator
 
 # Clean
 clean-bins:
