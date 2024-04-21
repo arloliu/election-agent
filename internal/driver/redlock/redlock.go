@@ -37,7 +37,7 @@ func (r *RedLock) NewMutex(name string, value string, options ...Option) *Mutex 
 		randomValue:   false,
 		driftFactor:   0.01,
 		timeoutFactor: 0.05,
-		getConns:      r.GetConns,
+		getConns:      r.getConns,
 	}
 	for _, opt := range options {
 		opt.Apply(mutex)
@@ -69,7 +69,7 @@ func (r *RedLock) GetAllConnCount() int {
 	return n
 }
 
-func (r *RedLock) GetAllConns() []Conn {
+func (r *RedLock) getAllConns() []Conn {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -83,7 +83,7 @@ func (r *RedLock) GetAllConns() []Conn {
 	return conns
 }
 
-func (r *RedLock) GetMasterConns() ([]Conn, int) {
+func (r *RedLock) getMasterConns() ([]Conn, int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -93,7 +93,7 @@ func (r *RedLock) GetMasterConns() ([]Conn, int) {
 	return connShards[0], r.quorum
 }
 
-func (r *RedLock) GetConns(key string) ([]Conn, int) {
+func (r *RedLock) getConns(key string) ([]Conn, int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -131,7 +131,7 @@ func (r *RedLock) SetConnShards(connShards ConnShards) {
 }
 
 func (r *RedLock) Ping(ctx context.Context) (int, error) {
-	conns := r.GetAllConns()
+	conns := r.getAllConns()
 	return actStatusOpAsync(conns, (len(conns)/2)+1, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).Ping()
 	})
@@ -142,7 +142,7 @@ func (r *RedLock) Get(ctx context.Context, key string) (string, error) {
 		return "", errors.New("The redis key is empty")
 	}
 
-	conns, quorum := r.GetConns(key)
+	conns, quorum := r.getConns(key)
 	_, val, err := actStringOpAsync(conns, quorum, func(conn Conn) (string, error) {
 		return conn.WithContext(ctx).Get(key)
 	})
@@ -155,7 +155,7 @@ func (r *RedLock) Set(ctx context.Context, key string, value string) (int, error
 		return 0, errors.New("Set: the key is empty")
 	}
 
-	conns, quorum := r.GetConns(key)
+	conns, quorum := r.getConns(key)
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).Set(key, value)
 	})
@@ -166,7 +166,7 @@ func (r *RedLock) SetBool(ctx context.Context, key string, value bool) (int, err
 		return 0, errors.New("SetBool: the key for is empty")
 	}
 
-	conns, quorum := r.GetConns(key)
+	conns, quorum := r.getConns(key)
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).Set(key, BoolStr(value))
 	})
@@ -178,7 +178,7 @@ func (r *RedLock) MGet(ctx context.Context, keys ...string) ([]string, error) {
 		err   error
 	}
 
-	conns, quorum := r.GetMasterConns()
+	conns, quorum := r.getMasterConns()
 	connSzie := len(conns)
 
 	ch := make(chan result, connSzie)
@@ -235,7 +235,7 @@ func (r *RedLock) MSet(ctx context.Context, pairs ...any) (int, error) {
 		return 0, errors.New("MSet: the length of pairs is not an odd number")
 	}
 
-	conns, quorum := r.GetMasterConns()
+	conns, quorum := r.getMasterConns()
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).MSet(pairs...)
 	})

@@ -31,7 +31,11 @@ type (
 )
 
 func (s ConnShards) Conns(key string) []Conn {
-	return s[connIdx(key, len(s))]
+	connNum := len(s)
+	if connNum == 1 {
+		return s[0]
+	}
+	return s[connIdx(key, connNum)]
 }
 
 func connIdx(key string, connNum int) int {
