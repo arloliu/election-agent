@@ -38,7 +38,7 @@ type Mutex struct {
 	randomValue   bool
 	until         time.Time
 
-	getConns func() ([]Conn, int)
+	getConns func(string) ([]Conn, int)
 }
 
 // Name returns mutex name (i.e. the Redis key).
@@ -83,6 +83,8 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 		value = m.value
 	}
 
+	conns, quorum := m.getConns(m.name)
+
 	var timer *time.Timer
 	for i := 0; i < tries; i++ {
 		if i != 0 {
@@ -103,8 +105,6 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 		}
 
 		start := time.Now()
-
-		conns, quorum := m.getConns()
 		n, err := func() (int, error) {
 			ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
 			defer cancel()
@@ -131,7 +131,7 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 
 // UnlockContext unlocks m and returns the status of unlock.
 func (m *Mutex) UnlockContext(ctx context.Context) (bool, error) {
-	conns, quorum := m.getConns()
+	conns, quorum := m.getConns(m.name)
 	n, err := func() (int, error) {
 		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
 		defer cancel()
@@ -148,7 +148,7 @@ func (m *Mutex) UnlockContext(ctx context.Context) (bool, error) {
 // ExtendContext resets the mutex's expiry and returns the status of expiry extension.
 func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 	start := time.Now()
-	conns, quorum := m.getConns()
+	conns, quorum := m.getConns(m.name)
 
 	n, err := func() (int, error) {
 		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
@@ -176,7 +176,7 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 // HandoverContext set a new holder of mutex and return the status.
 func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error) {
 	start := time.Now()
-	conns, quorum := m.getConns()
+	conns, quorum := m.getConns(m.name)
 
 	n, err := actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return m.handover(ctx, conn, holder, int(m.expiry/time.Millisecond))

@@ -42,7 +42,7 @@ var (
 	featureIterations  = 1
 )
 
-func TestMain(m *testing.M) { //nolint:cyclop
+func TestMain(m *testing.M) { //nolint:cyclop,gocyclo
 	cfg, err := envconf.NewFromFlags()
 	if err != nil {
 		log.Fatalf("failed to build envconf from flags: %s", err)
@@ -171,8 +171,12 @@ func TestMain(m *testing.M) { //nolint:cyclop
 				return ctx, p.Err()
 			}
 
-			for _, deployName := range []string{"redis-1", "redis-2", "redis-3", "zone-coordinator"} {
-				if err := waitDeploymentAvailable(cfg, deployName); err != nil {
+			if err := waitDeploymentAvailable(cfg, "zone-coordinator"); err != nil {
+				return ctx, err
+			}
+
+			for _, stsName := range []string{"redis-a", "redis-b", "redis-c"} {
+				if err := waitStatefulSetAvailable(ctx, cfg, stsName, 2); err != nil {
 					return ctx, err
 				}
 			}
@@ -191,7 +195,7 @@ func TestMain(m *testing.M) { //nolint:cyclop
 				}
 			}
 
-			time.Sleep(10 * time.Second)
+			time.Sleep(5 * time.Second)
 			return ctx, nil
 		},
 	)

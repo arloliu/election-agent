@@ -56,9 +56,9 @@ spec:
               value: 5s
 
             - name: EA_REDIS_MODE
-              value: single
+              value: sharding
             - name: EA_REDIS_URLS
-              value: redis://redis-1:6379,redis://redis-2:6379,redis://redis-3:6379
+              value: redis://redis-a-0.redis-g1:6379?addr=redis-a-1.redis-g1:6379,redis://redis-b-0.redis-g2:6379?addr=redis-b-1.redis-g2:6379,redis://redis-c-0.redis-g3:6379?addr=redis-c-1.redis-g3:6379
           ports:
             - containerPort: 80
               name: http

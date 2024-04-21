@@ -97,14 +97,14 @@ type MetricConfig struct {
 type RedisConfig struct {
 	// Mode indicates the redis server mode. Differenet modes require different URLs format.
 	// Defaults to `single``.
-	// Possible values: `single`,`cluster`,`failover`.
+	// Possible values: `single`,`cluster`,`sharding`.
 	Mode string `default:"single" yaml:"mode"`
 
 	// URLs is a list of redis servers.
 	//
 	// Single mode: the url format of each redis server is: `redis://<user>:<password>@<host>:<port>/<db_number>`.
 	//
-	// Failover mode: the url format of each redis server is: `redis://<user>:<password>@<host>:<port>/<db_number>`.
+	// Shard mode: the url format of each redis server shgrds is: `redis://<user>:<password>@<host>:<port>?addr=<host2>:<port2>&addr=<host3>:<port3>.
 	//
 	// Cluster mode: the url format of each redis server is: `redis://<user>:<password>@<host>:<port>?addr=<host2>:<port2>&addr=<host3>:<port3>`.
 	URLs []string `yaml:"urls"`
@@ -117,8 +117,6 @@ type RedisConfig struct {
 	// Timeout of whole multiple redis node operations.
 	// Defaults to `3s`
 	OpearationTimeout time.Duration `default:"3s" split_words:"true" yaml:"operation_timeout"`
-	// Master is the redis master name, it only take effects when the 'mode' is "failover"(sentinel)
-	Master string `yaml:"master"`
 }
 
 type LeaseConfig struct {
@@ -199,7 +197,7 @@ func Init() error {
 	}
 
 	// TODO: implement stricter sanity check
-	if cfg.Driver == "redis" && !slices.Contains([]string{"single", "failover", "cluster"}, cfg.Redis.Mode) {
+	if cfg.Driver == "redis" && !slices.Contains([]string{"single", "cluster", "sharding"}, cfg.Redis.Mode) {
 		return fmt.Errorf("Unsupported redis mode:%s", cfg.Redis.Mode)
 	}
 	if !cfg.HTTP.Enable && cfg.Metric.Enable {

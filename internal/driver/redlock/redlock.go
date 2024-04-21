@@ -14,16 +14,16 @@ import (
 const ShuffleConnPoolSize = 10
 
 type RedLock struct {
-	conns  []Conn
-	quorum int
+	connShards ConnShards
+	quorum     int
 
-	shuffleConnPool [ShuffleConnPoolSize][]Conn
+	shuffleConnPool [ShuffleConnPoolSize]ConnShards
 	mu              sync.Mutex
 }
 
-func New(conns ...Conn) *RedLock {
+func New(connShards ...ConnGroup) *RedLock {
 	lock := &RedLock{}
-	lock.SetConns(conns)
+	lock.SetConnShards(connShards)
 	return lock
 }
 
@@ -54,35 +54,85 @@ func (r *RedLock) NewMutex(name string, value string, options ...Option) *Mutex 
 	return mutex
 }
 
-func (r *RedLock) GetConns() ([]Conn, int) {
+func (r *RedLock) GetQuorum() int {
+	return r.quorum
+}
+
+func (r *RedLock) GetAllConnCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, cg := range r.connShards {
+		n += len(cg)
+	}
+
+	return n
+}
+
+func (r *RedLock) GetAllConns() []Conn {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
-	return r.shuffleConnPool[idx], r.quorum
+	connPool := r.shuffleConnPool[idx]
+	conns := make([]Conn, 0, len(connPool)*len(connPool[0]))
+	for _, connShards := range connPool {
+		conns = append(conns, connShards...)
+	}
+
+	return conns
 }
 
-func (r *RedLock) SetConns(conns []Conn) {
+func (r *RedLock) GetMasterConns() ([]Conn, int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.conns = conns
-	r.quorum = len(r.conns)/2 + 1
+	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
+	connShards := r.shuffleConnPool[idx]
+
+	return connShards[0], r.quorum
+}
+
+func (r *RedLock) GetConns(key string) ([]Conn, int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
+	connShards := r.shuffleConnPool[idx]
+	if key == "" {
+		return connShards[0], r.quorum
+	}
+
+	return connShards.Conns(key), r.quorum
+}
+
+func (r *RedLock) SetConnShards(connShards ConnShards) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.connShards = connShards
+	r.quorum = len(r.connShards[0])/2 + 1
 
 	for i := 0; i < ShuffleConnPoolSize; i++ {
-		clonedConns := make([]Conn, len(conns))
-		_ = copy(clonedConns, conns)
-		rand.Shuffle(len(clonedConns), func(i, j int) {
-			clonedConns[i], clonedConns[j] = clonedConns[j], clonedConns[i]
+		clonedConnShards := make(ConnShards, len(connShards))
+		for i, connGroup := range connShards {
+			clonedConnShards[i] = make(ConnGroup, len(connGroup))
+			_ = copy(clonedConnShards[i], connGroup)
+		}
+
+		rand.Shuffle(len(r.connShards[0]), func(i, j int) {
+			for idx := range clonedConnShards {
+				clonedConnShards[idx][i], clonedConnShards[idx][j] = clonedConnShards[idx][j], clonedConnShards[idx][i]
+			}
 		})
 
-		r.shuffleConnPool[i] = clonedConns
+		r.shuffleConnPool[i] = clonedConnShards
 	}
 }
 
 func (r *RedLock) Ping(ctx context.Context) (int, error) {
-	conns, quorum := r.GetConns()
-	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
+	conns := r.GetAllConns()
+	return actStatusOpAsync(conns, (len(conns)/2)+1, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).Ping()
 	})
 }
@@ -92,7 +142,7 @@ func (r *RedLock) Get(ctx context.Context, key string) (string, error) {
 		return "", errors.New("The redis key is empty")
 	}
 
-	conns, quorum := r.GetConns()
+	conns, quorum := r.GetConns(key)
 	_, val, err := actStringOpAsync(conns, quorum, func(conn Conn) (string, error) {
 		return conn.WithContext(ctx).Get(key)
 	})
@@ -105,7 +155,7 @@ func (r *RedLock) Set(ctx context.Context, key string, value string) (int, error
 		return 0, errors.New("Set: the key is empty")
 	}
 
-	conns, quorum := r.GetConns()
+	conns, quorum := r.GetConns(key)
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).Set(key, value)
 	})
@@ -116,7 +166,7 @@ func (r *RedLock) SetBool(ctx context.Context, key string, value bool) (int, err
 		return 0, errors.New("SetBool: the key for is empty")
 	}
 
-	conns, quorum := r.GetConns()
+	conns, quorum := r.GetConns(key)
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).Set(key, BoolStr(value))
 	})
@@ -128,7 +178,7 @@ func (r *RedLock) MGet(ctx context.Context, keys ...string) ([]string, error) {
 		err   error
 	}
 
-	conns, quorum := r.GetConns()
+	conns, quorum := r.GetMasterConns()
 	connSzie := len(conns)
 
 	ch := make(chan result, connSzie)
@@ -185,7 +235,7 @@ func (r *RedLock) MSet(ctx context.Context, pairs ...any) (int, error) {
 		return 0, errors.New("MSet: the length of pairs is not an odd number")
 	}
 
-	conns, quorum := r.GetConns()
+	conns, quorum := r.GetMasterConns()
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
 		return conn.WithContext(ctx).MSet(pairs...)
 	})

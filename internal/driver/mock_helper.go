@@ -15,13 +15,15 @@ import (
 )
 
 func NewMockRedisKVDriver(cfg *config.Config) *RedisKVDriver {
-	conns := []redlock.Conn{NewMockRedlockConn(), NewMockRedlockConn(), NewMockRedlockConn()}
+	connGroup1 := redlock.ConnGroup{NewMockRedlockConn(), NewMockRedlockConn(), NewMockRedlockConn()}
+	connGroup2 := redlock.ConnGroup{NewMockRedlockConn(), NewMockRedlockConn(), NewMockRedlockConn()}
+	connShards := redlock.ConnShards{connGroup1, connGroup2}
 	driver := &RedisKVDriver{
-		ctx:    context.TODO(),
-		cfg:    cfg,
-		conns:  conns,
-		rlock:  redlock.New(conns...),
-		hasher: maphash.NewHasher[string](),
+		ctx:        context.TODO(),
+		cfg:        cfg,
+		connShards: connShards,
+		rlock:      redlock.New(connShards...),
+		hasher:     maphash.NewHasher[string](),
 	}
 
 	return driver

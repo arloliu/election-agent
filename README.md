@@ -78,7 +78,7 @@ Please refer to [Metrics Documentation](./docs/metrics.md) for details.
 
   Defaults to `single`.
 
-  Possible values: `single`,`cluster`,`failover`.
+  Possible values: `single`,`cluster`,`sharding`.
 
   **EA_REDIS_PREFIX** - The redis key prefix.
   The lease Redis key will be formatted as `[prefix]/[lease name]`.
@@ -90,15 +90,11 @@ Please refer to [Metrics Documentation](./docs/metrics.md) for details.
   Single mode: The URL format of each redis server is:
   `redis://<user>:<password>@<host>:<port>/<db_number>`.
 
-  Failover mode: The URL format of each redis server is:
-  `redis://<user>:<password>@<host>:<port>/<db_number>`.
+  Sharding mode: The URL format of each redis server sharding group is:
+  `redis://<user>:<password>@<host>:<port>?addr=<host2>:<port2>&addr=<host3>:<port3>`.
 
   Cluster mode: The URL format of each redis server is:
   `redis://<user>:<password>@<host>:<port>?addr=<host2>:<port2>&addr=<host3>:<port3>`.
-
-  **EA_REDIS_MASTER** - The redis master name.
-
-  It only takes effect when the `mode` is `failover`
 
 ### gRPC API
 Please refer to `proto/election_agent/v1/election_agent.proto` for details.

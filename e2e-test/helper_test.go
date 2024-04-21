@@ -227,6 +227,63 @@ func waitDeploymentScaled(cfg *envconf.Config, deployment *appsv1.Deployment, ex
 	return nil
 }
 
+func scaleStatefulSet(ctx context.Context, cfg *envconf.Config, name string, replicas int32) error {
+	client := cfg.Client()
+	sts := appsv1.StatefulSet{}
+	if err := client.Resources().Get(ctx, name, cfg.Namespace(), &sts); err != nil {
+		return err
+	}
+
+	if *sts.Spec.Replicas == replicas {
+		log.Printf("%s deployment replicas %d is the same, no needs to scale\n", name, replicas)
+		return nil
+	}
+
+	sts.Spec.Replicas = &replicas
+	log.Printf("Scaling %s StatefulSet replicas to %d...\n", name, replicas)
+	if err := client.Resources().Update(ctx, &sts); err != nil {
+		return err
+	}
+
+	if err := waitStatefulSetScaled(cfg, &sts, replicas); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func waitStatefulSetScaled(cfg *envconf.Config, sts *appsv1.StatefulSet, expectedReplicas int32) error {
+	client := cfg.Client()
+
+	scaleFetcher := func(object k8s.Object) int32 {
+		return object.(*appsv1.StatefulSet).Status.ReadyReplicas
+	}
+	log.Printf("Waiting for StatefulSet %s to be scaled to %d...", sts.ObjectMeta.Name, expectedReplicas)
+	if err := wait.For(
+		conditions.New(client.Resources()).ResourceScaled(sts, scaleFetcher, expectedReplicas),
+		wait.WithImmediate(),
+		wait.WithTimeout(1*time.Minute),
+		wait.WithInterval(1*time.Second),
+	); err != nil {
+		log.Printf("! Timedout while waiting for %s to be scaled, err: %s", sts.ObjectMeta.Name, err.Error())
+		return err
+	}
+
+	log.Printf("# StatefulSet %s has been scaled to %d", sts.ObjectMeta.Name, expectedReplicas)
+	return nil
+}
+
+func waitStatefulSetAvailable(ctx context.Context, cfg *envconf.Config, stsName string, expectedReplicas int32) error {
+	client := cfg.Client()
+	log.Printf("Waiting for %s StatefulSet to be available...", stsName)
+	sts := appsv1.StatefulSet{}
+	if err := client.Resources().Get(ctx, stsName, cfg.Namespace(), &sts); err != nil {
+		return err
+	}
+
+	return waitStatefulSetScaled(cfg, &sts, expectedReplicas)
+}
+
 func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state string, mode string) error {
 	elapsed := time.Now().Add(stateChangeTimeout)
 	agentHost := headlessSvcGRPCHost(cfg, name)

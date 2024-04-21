@@ -16,6 +16,7 @@ const (
 	z2AgentName   = "election-agent-z2"
 	zcName        = "zone-coordinator"
 	agentReplicas = 3
+	redisReplicas = 2
 )
 
 func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
@@ -231,14 +232,14 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 
 	f7 := features.New("zone-test7").
 		Assess("active zone is z1, all redis down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			if err := scaleDeployment(ctx, cfg, "redis-1", 0); err != nil {
-				t.Fatalf("failed to scale down redis-1 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-a", 0); err != nil {
+				t.Fatalf("failed to scale down redis-a StatefulSet, err:%s", err.Error())
 			}
-			if err := scaleDeployment(ctx, cfg, "redis-2", 0); err != nil {
-				t.Fatalf("failed to scale down redis-2 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-b", 0); err != nil {
+				t.Fatalf("failed to scale down redis-b StatefulSet, err:%s", err.Error())
 			}
-			if err := scaleDeployment(ctx, cfg, "redis-3", 0); err != nil {
-				t.Fatalf("failed to scale down redis-3 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-c", 0); err != nil {
+				t.Fatalf("failed to scale down redis-c StatefulSet, err:%s", err.Error())
 			}
 
 			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.NormalMode); err != nil {
@@ -255,14 +256,14 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			return ctx
 		}).
 		Teardown(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			if err := scaleDeployment(ctx, cfg, "redis-1", 1); err != nil {
-				t.Fatalf("failed to scale up redis-1 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-a", redisReplicas); err != nil {
+				t.Fatalf("failed to scale up redis-a StatefulSet, err:%s", err.Error())
 			}
-			if err := scaleDeployment(ctx, cfg, "redis-2", 1); err != nil {
-				t.Fatalf("failed to scale up redis-2 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-b", redisReplicas); err != nil {
+				t.Fatalf("failed to scale up redis-b StatefulSet, err:%s", err.Error())
 			}
-			if err := scaleDeployment(ctx, cfg, "redis-3", 1); err != nil {
-				t.Fatalf("failed to scale up redis-3 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-c", redisReplicas); err != nil {
+				t.Fatalf("failed to scale up redis-c StatefulSet, err:%s", err.Error())
 			}
 
 			return ctx
@@ -270,13 +271,13 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 		Feature()
 
 	f8 := features.New("zone-test8").
-		Assess("active zone is z2, redis-1 down, then redis-2 down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		Assess("active zone is z2, redis-a down, then redis-b down", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := updateActiveZone(ctx, cfg, "z2"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}
 
-			if err := scaleDeployment(ctx, cfg, "redis-1", 0); err != nil {
-				t.Fatalf("failed to scale down redis-1 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-a", 0); err != nil {
+				t.Fatalf("failed to scale down redis-a StatefulSet, err:%s", err.Error())
 			}
 
 			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.StandbyState, agent.NormalMode); err != nil {
@@ -290,8 +291,8 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 				t.Fatal(err.Error())
 			}
 
-			if err := scaleDeployment(ctx, cfg, "redis-2", 0); err != nil {
-				t.Fatalf("failed to scale down redis-2 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-b", 0); err != nil {
+				t.Fatalf("failed to scale down redis-b StatefulSet, err:%s", err.Error())
 			}
 
 			if err := agentStatusIs(ctx, cfg, z1AgentName, agent.UnavailableState, agent.NormalMode); err != nil {
@@ -304,12 +305,13 @@ func TestZoneSwitch(t *testing.T) { //nolint:gocyclo,cyclop
 			return ctx
 		}).
 		Teardown(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			if err := scaleDeployment(ctx, cfg, "redis-1", 1); err != nil {
-				t.Fatalf("failed to scale up redis-1 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-a", redisReplicas); err != nil {
+				t.Fatalf("failed to scale up redis-a StatefulSet, err:%s", err.Error())
 			}
-			if err := scaleDeployment(ctx, cfg, "redis-2", 1); err != nil {
-				t.Fatalf("failed to scale up redis-2 deployment, err:%s", err.Error())
+			if err := scaleStatefulSet(ctx, cfg, "redis-b", redisReplicas); err != nil {
+				t.Fatalf("failed to scale up redis-b StatefulSet, err:%s", err.Error())
 			}
+
 			if err := updateActiveZone(ctx, cfg, "z1"); err != nil {
 				t.Fatalf("failed to update active zone, err:%s", err.Error())
 			}

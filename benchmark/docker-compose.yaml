@@ -7,6 +7,14 @@ services:
       - "7000:7000"
     networks:
       - default
+  redis1a:
+    container_name: election-agent-redis1a
+    image: redis:7.2
+    command: --port 7100
+    ports:
+      - "7100:7100"
+    networks:
+      - default
   redis2:
     container_name: election-agent-redis2
     image: redis:7.2
@@ -15,12 +23,28 @@ services:
       - "7001:7001"
     networks:
       - default
+  redis2a:
+    container_name: election-agent-redis2a
+    image: redis:7.2
+    command: --port 7101
+    ports:
+      - "7101:7101"
+    networks:
+      - default
   redis3:
     container_name: election-agent-redis3
     image: redis:7.2
     command: --port 7002
     ports:
       - "7002:7002"
+    networks:
+      - default
+  redis3a:
+    container_name: election-agent-redis3a
+    image: redis:7.2
+    command: --port 7102
+    ports:
+      - "7102:7102"
     networks:
       - default
 

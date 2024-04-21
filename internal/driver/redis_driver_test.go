@@ -34,10 +34,10 @@ func TestMain(m *testing.M) {
 func TestRedisKVDriver_IsUnhealthy(t *testing.T) {
 	require := require.New(t)
 
-	conns := []redlock.Conn{nil, nil, nil}
+	connShards := redlock.ConnShards{redlock.ConnGroup{nil, nil, nil}}
 	rd := &RedisKVDriver{
-		conns: conns,
-		rlock: redlock.New(conns...),
+		connShards: connShards,
+		rlock:      redlock.New(connShards...),
 	}
 	err := errors.New("error")
 	require.False(rd.IsUnhealthy((err)))
@@ -125,7 +125,7 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 
 	n, err := driver.MSet(ctx, "key1", "val1", "key2", "val2")
 	require.NoError(err)
-	require.Equal(len(driver.conns), n)
+	require.Equal(len(driver.connShards), n)
 
 	vals, err := driver.MGet(ctx, "key1", "key2")
 	require.NoError(err)
@@ -134,7 +134,9 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 }
 
 func connSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
-	for _, conn := range driver.conns {
+	for _, connShards := range driver.connShards {
+		require.LessOrEqual(1, len(connShards))
+		conn := connShards[0]
 		ok, err := conn.WithContext(driver.ctx).Set(key, val)
 		require.NoError(err)
 		require.True(ok)
@@ -156,7 +158,9 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(driver)
 
-	for _, conn := range driver.conns {
+	for _, connShards := range driver.connShards {
+		require.LessOrEqual(1, len(connShards))
+		conn := connShards[0]
 		result, err := conn.WithContext(ctx).Ping()
 		require.Error(err)
 		require.False(result)

@@ -20,14 +20,14 @@ import (
 
 // RedisKVDriver implements KVDriver interface
 type RedisKVDriver struct {
-	ctx      context.Context
-	cfg      *config.Config
-	conns    []redlock.Conn
-	mode     string
-	rlock    *redlock.RedLock
-	mu       sync.Mutex
-	hasher   maphash.Hasher[string]
-	hostname string
+	ctx        context.Context
+	cfg        *config.Config
+	connShards redlock.ConnShards
+	mode       string
+	rlock      *redlock.RedLock
+	mu         sync.Mutex
+	hasher     maphash.Hasher[string]
+	hostname   string
 
 	stateKey      string
 	modeKey       string
@@ -37,13 +37,13 @@ type RedisKVDriver struct {
 var _ KVDriver = (*RedisKVDriver)(nil)
 
 func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, error) {
-	conns, err := redlock.CreateConnections(ctx, cfg)
+	connShards, err := redlock.CreateConnections(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	idx := cfg.Redis.Primary
-	if idx < 0 || idx >= len(conns) {
+	if idx < 0 || idx >= len(connShards[0]) {
 		errMsg := fmt.Sprintf("The primary index %d is out of range", idx)
 		logging.Error(errMsg)
 		return nil, errors.New(errMsg)
@@ -52,9 +52,9 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 	inst := &RedisKVDriver{
 		ctx:           ctx,
 		cfg:           cfg,
-		conns:         conns,
+		connShards:    connShards,
 		mode:          agent.NormalMode,
-		rlock:         redlock.New(conns...),
+		rlock:         redlock.New(connShards...),
 		hasher:        maphash.NewHasher[string](),
 		hostname:      os.Getenv("HOSTNAME"),
 		stateKey:      cfg.AgentInfoKey(agent.StateKey),
@@ -76,31 +76,36 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 		_ = inst.SetAgentStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode})
 	}
 
+	logging.Infow("Redis key-value driver",
+		"mode", cfg.Redis.Mode,
+		"primary", cfg.Redis.Primary,
+		"operation_timeout", cfg.Redis.OpearationTimeout,
+		"backend_count", inst.rlock.GetAllConnCount(),
+	)
 	return inst, err
 }
 
 func (rd *RedisKVDriver) ConnectionCount() int {
-	conns, _ := rd.rlock.GetConns()
-	return len(conns)
+	return rd.rlock.GetAllConnCount()
 }
 
 func (rd *RedisKVDriver) RebuildConnections() error {
-	newConns, err := redlock.CreateConnections(rd.ctx, rd.cfg)
+	newConnGroups, err := redlock.CreateConnections(rd.ctx, rd.cfg)
 	if err != nil {
 		return err
 	}
 
 	rd.mu.Lock()
-	rd.conns = newConns
+	rd.connShards = newConnGroups
 	rd.mu.Unlock()
 
-	var conns []redlock.Conn
+	var connShards []redlock.ConnGroup
 	if rd.mode == agent.OrphanMode {
-		conns = []redlock.Conn{rd.conns[rd.cfg.Redis.Primary]}
+		connShards = []redlock.ConnGroup{rd.connShards[rd.cfg.Redis.Primary]}
 	} else {
-		conns = rd.conns
+		connShards = rd.connShards
 	}
-	rd.rlock.SetConns(conns)
+	rd.rlock.SetConnShards(connShards)
 	return nil
 }
 
@@ -125,8 +130,10 @@ func (rd *RedisKVDriver) NewMutex(name string, kind string, holder string, ttl t
 }
 
 func (rd *RedisKVDriver) Shutdown(ctx context.Context) error {
-	for _, conn := range rd.conns {
-		conn.Close(ctx)
+	for _, connShards := range rd.connShards {
+		for _, conn := range connShards {
+			conn.Close(ctx)
+		}
 	}
 	return nil
 }
@@ -219,12 +226,12 @@ func (rd *RedisKVDriver) SetOperationMode(mode string) {
 	rd.mu.Unlock()
 
 	if mode == agent.OrphanMode {
-		conns := []redlock.Conn{rd.conns[rd.cfg.Redis.Primary]}
-		rd.rlock.SetConns(conns)
+		connShards := []redlock.ConnGroup{rd.connShards[rd.cfg.Redis.Primary]}
+		rd.rlock.SetConnShards(connShards)
 		return
 	}
 
-	rd.rlock.SetConns(rd.conns)
+	rd.rlock.SetConnShards(rd.connShards)
 }
 
 func (rd *RedisKVDriver) Ping(ctx context.Context) (int, error) {
@@ -286,7 +293,7 @@ func (rd *RedisKVDriver) IsUnhealthy(err error) bool {
 		return false
 	}
 
-	conns, quorum := rd.rlock.GetConns()
+	quorum := rd.rlock.GetQuorum()
 	if merr.Len() < quorum {
 		return false
 	}
@@ -297,5 +304,5 @@ func (rd *RedisKVDriver) IsUnhealthy(err error) bool {
 			n++
 		}
 	}
-	return n > len(conns)-quorum
+	return n >= quorum
 }

@@ -22,7 +22,7 @@ type goredisConn struct {
 
 var _ Conn = (*goredisConn)(nil)
 
-func CreateConnections(ctx context.Context, cfg *config.Config) ([]Conn, error) {
+func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, error) {
 	redisOpts, err := parseRedisURLs(cfg)
 	if err != nil {
 		return nil, err
@@ -35,23 +35,21 @@ func CreateConnections(ctx context.Context, cfg *config.Config) ([]Conn, error) 
 	if cfg.Redis.Primary < 0 || cfg.Redis.Primary >= len(redisOpts) {
 		return nil, fmt.Errorf("The value of redis.primary=%d is out of range", cfg.Redis.Primary)
 	}
-
-	clients := make([]redis.UniversalClient, 0, len(redisOpts))
-	for _, opts := range redisOpts {
-		opts.DialTimeout = 2 * time.Second
-		opts.ReadTimeout = 2 * time.Second
-		opts.WriteTimeout = 2 * time.Second
-		opts.ContextTimeoutEnabled = true
-		opts.DisableIndentity = true
-		clients = append(clients, redis.NewUniversalClient(opts))
+	shardSize := len(redisOpts[0])
+	connShards := make(ConnShards, shardSize)
+	for _, optss := range redisOpts {
+		for idx, opts := range optss {
+			opts.DialTimeout = 2 * time.Second
+			opts.ReadTimeout = 2 * time.Second
+			opts.WriteTimeout = 2 * time.Second
+			opts.ContextTimeoutEnabled = true
+			opts.DisableIndentity = true
+			client := redis.NewUniversalClient(opts)
+			connShards[idx] = append(connShards[idx], &goredisConn{ctx: ctx, delegate: client})
+		}
 	}
 
-	conns := make([]Conn, len(clients))
-	for i, c := range clients {
-		conns[i] = &goredisConn{ctx: ctx, delegate: c}
-	}
-
-	return conns, nil
+	return connShards, nil
 }
 
 func (c *goredisConn) WithContext(ctx context.Context) Conn {
@@ -132,10 +130,10 @@ func noErrNil(err error) error {
 	return nil
 }
 
-func parseRedisURLs(cfg *config.Config) ([]*redis.UniversalOptions, error) {
+func parseRedisURLs(cfg *config.Config) ([][]*redis.UniversalOptions, error) {
 	redisURLs := cfg.Redis.URLs
 	mode := cfg.Redis.Mode
-	redisOpts := make([]*redis.UniversalOptions, 0)
+	redisOpts := make([][]*redis.UniversalOptions, 0)
 
 	if mode == "single" {
 		if len(redisURLs) < 3 {
@@ -152,7 +150,7 @@ func parseRedisURLs(cfg *config.Config) ([]*redis.UniversalOptions, error) {
 			}
 
 			uopts := optsToUopts(opts)
-			redisOpts = append(redisOpts, uopts)
+			redisOpts = append(redisOpts, []*redis.UniversalOptions{uopts})
 		}
 	} else if mode == "cluster" {
 		if len(redisURLs) < 3 {
@@ -162,20 +160,58 @@ func parseRedisURLs(cfg *config.Config) ([]*redis.UniversalOptions, error) {
 			return nil, errors.New("When the redis mode is cluster, the number of redis cluster urls must be an odd number")
 		}
 
-		for _, urls := range redisURLs {
-			copts, err := redis.ParseClusterURL(urls)
+		for _, redisURL := range redisURLs {
+			copts, err := redis.ParseClusterURL(redisURL)
 			if err != nil {
 				return nil, err
 			}
 
 			uopts := coptsToUopts(copts)
-			redisOpts = append(redisOpts, uopts)
+			redisOpts = append(redisOpts, []*redis.UniversalOptions{uopts})
 		}
-	} else if mode == "failover" {
-		return nil, errors.New("The failover mode is not suppported yet")
+	} else if mode == "sharding" {
+		if len(redisURLs) < 3 {
+			return nil, errors.New("When the redis mode is sharding, the number of redis cluster urls must be at least 3")
+		}
+		if (len(redisURLs) % 3) != 0 {
+			return nil, errors.New("When the redis mode is sharding, the number of redis cluster urls must be an odd number")
+		}
+
+		uoptssCount := 0
+		for _, redisURL := range redisURLs {
+			uoptss, err := parseShardingURL(redisURL)
+			if err != nil {
+				return nil, err
+			}
+			if uoptssCount == 0 {
+				uoptssCount = len(uoptss)
+			} else if uoptssCount != len(uoptss) {
+				return nil, errors.New("The number of redis shard nodes must be the same")
+			}
+			if len(uoptss) < 2 {
+				return nil, errors.New("When the redis mode is sharding, the number of each redis group must be at least 2")
+			}
+
+			redisOpts = append(redisOpts, uoptss)
+		}
 	}
 
 	return redisOpts, nil
+}
+
+func parseShardingURL(redisURL string) ([]*redis.UniversalOptions, error) {
+	copts, err := redis.ParseClusterURL(redisURL)
+	if err != nil {
+		return nil, err
+	}
+	uoptss := make([]*redis.UniversalOptions, 0, len(copts.Addrs))
+	for _, addr := range copts.Addrs {
+		uopts := coptsToUopts(copts)
+		uopts.Addrs = []string{addr}
+		uoptss = append(uoptss, uopts)
+	}
+
+	return uoptss, nil
 }
 
 func optsToUopts(o *redis.Options) *redis.UniversalOptions {
