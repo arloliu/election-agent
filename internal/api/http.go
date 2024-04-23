@@ -62,8 +62,8 @@ type CampaignRequest struct {
 }
 
 type CampaignResult struct {
-	Elected bool   `json:"elected"`
 	Leader  string `json:"leader"`
+	Elected bool   `json:"elected"`
 }
 
 type ExtendElectedTermRequest struct {

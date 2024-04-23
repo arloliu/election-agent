@@ -30,9 +30,9 @@ const (
 )
 
 type Status struct {
-	mu    sync.Mutex
 	State string
 	Mode  string
+	mu    sync.Mutex
 }
 
 func (s *Status) Store(status *Status) {
@@ -64,8 +64,8 @@ func GetLocalStatus() Status {
 
 type State struct {
 	val  atomic.Value
-	ttl  time.Duration
 	last atomic.Pointer[time.Time]
+	ttl  time.Duration
 }
 
 func NewState(state string, ttl time.Duration) *State {

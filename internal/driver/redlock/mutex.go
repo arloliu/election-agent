@@ -25,20 +25,16 @@ var defDelayFun = func(tries int) time.Duration {
 }
 
 type Mutex struct {
-	name   string
-	expiry time.Duration
-
-	tries     int
-	delayFunc DelayFunc
-
+	delayFunc     DelayFunc
+	getConns      func(string) ([]Conn, int)
+	name          string
+	value         string
+	expiry        time.Duration
+	tries         int
 	driftFactor   float64
 	timeoutFactor float64
 	opTimeout     time.Duration
-	value         string
 	randomValue   bool
-	until         time.Time
-
-	getConns func(string) ([]Conn, int)
 }
 
 // Name returns mutex name (i.e. the Redis key).
@@ -51,14 +47,46 @@ func (m *Mutex) Value() string {
 	return m.value
 }
 
-// Until returns the time of validity of acquired lock. The value will be zero value until a lock is acquired.
-func (m *Mutex) Until() time.Time {
-	return m.until
-}
-
 // TryLockContext only attempts to lock m once and returns immediately regardless of success or failure without retrying.
 func (m *Mutex) TryLockContext(ctx context.Context) error {
-	return m.lockContext(ctx, 1)
+	// fast path implementation
+	var err error
+	var value string
+
+	if m.randomValue {
+		value, err = genValue()
+		if err != nil {
+			return err
+		}
+	} else {
+		value = m.value
+	}
+
+	conns, quorum := m.getConns(m.name)
+
+	start := time.Now()
+	n, err := func() (int, error) {
+		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
+		defer cancel()
+		return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
+			return m.acquire(ctx, conn, value)
+		})
+	}()
+	if err != nil {
+		return err
+	}
+
+	if n < quorum {
+		return ErrFailed
+	}
+
+	now := time.Now()
+	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
+	if now.Before(until) {
+		return nil
+	}
+
+	return ErrFailed
 }
 
 // LockContext locks m. In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
@@ -68,9 +96,6 @@ func (m *Mutex) LockContext(ctx context.Context) error {
 
 // lockContext locks m. In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
 func (m *Mutex) lockContext(ctx context.Context, tries int) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	var err error
 	var value string
 
@@ -117,7 +142,6 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 		until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
 		if n >= quorum && now.Before(until) {
 			m.value = value
-			m.until = until
 			return nil
 		}
 
@@ -164,12 +188,13 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 	if n < quorum {
 		return false, err
 	}
+
 	now := time.Now()
 	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
 	if now.Before(until) {
-		m.until = until
 		return true, nil
 	}
+
 	return false, ErrExtendFailed
 }
 
@@ -192,7 +217,6 @@ func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error
 	now := time.Now()
 	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
 	if now.Before(until) {
-		m.until = until
 		return true, nil
 	}
 	return false, ErrHandoverFailed

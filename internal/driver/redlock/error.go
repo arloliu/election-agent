@@ -38,8 +38,8 @@ func (err *NodeTakenError) Error() string {
 
 // A RedisError is an error communicating with one of the Redis nodes.
 type RedisError struct {
-	Node int
 	Err  error
+	Node int
 }
 
 func (err *RedisError) Error() string {

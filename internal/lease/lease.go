@@ -48,8 +48,8 @@ func (e NonexistError) Error() string {
 }
 
 type ExtendFailError struct {
-	Lease string
 	Err   error
+	Lease string
 }
 
 func (e ExtendFailError) Error() string {
@@ -57,9 +57,9 @@ func (e ExtendFailError) Error() string {
 }
 
 type HandoverFailError struct {
+	Err    error
 	Lease  string
 	Holder string
-	Err    error
 }
 
 func (e HandoverFailError) Error() string {

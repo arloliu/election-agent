@@ -14,10 +14,9 @@ import (
 const ShuffleConnPoolSize = 10
 
 type RedLock struct {
-	connShards ConnShards
-	quorum     int
-
 	shuffleConnPool [ShuffleConnPoolSize]ConnShards
+	connShards      ConnShards
+	quorum          int
 	mu              sync.Mutex
 }
 
@@ -174,8 +173,8 @@ func (r *RedLock) SetBool(ctx context.Context, key string, value bool) (int, err
 
 func (r *RedLock) MGet(ctx context.Context, keys ...string) ([]string, error) {
 	type result struct {
-		reply []string
 		err   error
+		reply []string
 	}
 
 	conns, quorum := r.getMasterConns()
@@ -245,8 +244,8 @@ type stringFunc func(conn Conn) (string, error)
 
 func actStringOpAsync(conns []Conn, quorum int, actFunc stringFunc) (int, string, error) {
 	type result struct {
-		reply string
 		err   error
+		reply string
 	}
 
 	connSize := len(conns)
@@ -286,9 +285,9 @@ type statusFunc func(conn Conn) (bool, error)
 
 func actStatusOpAsync(conns []Conn, quorum int, failFast bool, actFunc statusFunc) (int, error) {
 	type result struct {
+		err      error
 		node     int
 		statusOK bool
-		err      error
 	}
 
 	connSize := len(conns)

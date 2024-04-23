@@ -10,7 +10,6 @@ import (
 type Mutex interface {
 	Name() string
 	Value() string
-	Until() time.Time
 	TryLockContext(ctx context.Context) error
 	LockContext(ctx context.Context) error
 	UnlockContext(ctx context.Context) (bool, error)

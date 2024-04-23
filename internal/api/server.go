@@ -84,8 +84,10 @@ func (srv *Server) startGRPC() error {
 	}
 
 	srv.grpcServer = grpc.NewServer(
+		grpc.WriteBufferSize(1024), // 1KB write buffer is far enough
+		grpc.ReadBufferSize(1024),  // 1KB read buffer is far enough
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime:             10 * time.Second, // If a client pings more than once every 10 seconds, terminate the connection
+			MinTime:             10 * time.Second, // The minimum amount of time a client should wait before sending a keepalive ping
 			PermitWithoutStream: true,             // Allow pings even when there are no active streams
 		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -93,7 +95,7 @@ func (srv *Server) startGRPC() error {
 			MaxConnectionAge:      30 * time.Second, // If any connection is alive for more than 30 seconds, send a GOAWAY
 			MaxConnectionAgeGrace: 5 * time.Second,  // Allow 5 seconds for pending RPCs to complete before forcibly closing connections
 			Time:                  5 * time.Second,  // Ping the client if it is idle for 5 seconds to ensure the connection is still active
-			Timeout:               1 * time.Second,  // Wait 1 second for the ping ack before assuming the connection is dead
+			Timeout:               3 * time.Second,  // Wait 3 seconds for the ping ack before assuming the connection is dead
 		}),
 	)
 	electionService := newElectionGRPCService(srv.cfg, srv.leaseMgr, srv.kubeClient)

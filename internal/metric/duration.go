@@ -6,9 +6,9 @@ import (
 )
 
 type AvgDuration struct {
+	last     atomic.Pointer[time.Time]
 	total    atomic.Int64
 	count    atomic.Int64
-	last     atomic.Pointer[time.Time]
 	interval time.Duration
 }
 

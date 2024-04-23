@@ -50,14 +50,14 @@ type zoneManager struct {
 }
 
 type zoneStatus struct {
-	zcConnected   bool
-	peerConnected bool
 	activeZone    string
 	mode          string
 	newMode       string
 	state         string
 	newState      string
 	peerStatus    []*eagrpc.AgentStatus
+	zcConnected   bool
+	peerConnected bool
 }
 
 func NewZoneManager(ctx context.Context, cfg *config.Config, driver driver.KVDriver, leaseMgr *lease.LeaseManager, metricMgr *metric.MetricManager) (*zoneManager, error) {
@@ -181,10 +181,12 @@ func (zm *zoneManager) getActiveZone() (string, bool) {
 	}
 
 	body, err := io.ReadAll(resp.Body)
+	if resp.Body != nil {
+		resp.Body.Close()
+	}
 	if err != nil {
 		return zm.activeZone, false
 	}
-	defer resp.Body.Close()
 
 	return string(body), true
 }
@@ -193,13 +195,6 @@ func (zm *zoneManager) getPeerStatus() ([]*eagrpc.AgentStatus, error) {
 	var mu sync.Mutex
 	statuses := make([]*eagrpc.AgentStatus, 0, len(zm.peerClients))
 	eg := errgroup.Group{}
-
-	// recreate new peer clients to avoid retry lagging
-	peerClients, err := zm.createPeerClients()
-	if err != nil {
-		return nil, err
-	}
-	zm.peerClients = peerClients
 
 	for _, client := range zm.peerClients {
 		client := client

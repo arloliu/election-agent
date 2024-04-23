@@ -47,15 +47,15 @@ func connIdx(key string, connNum int) int {
 }
 
 type Script struct {
-	KeyCount int
 	Src      string
 	Hash     string
+	KeyCount int
 }
 
 func NewScript(keyCount int, src string) *Script {
 	h := sha1.New() //nolint:gosec
 	_, _ = io.WriteString(h, src)
-	return &Script{keyCount, src, hex.EncodeToString(h.Sum(nil))}
+	return &Script{src, hex.EncodeToString(h.Sum(nil)), keyCount}
 }
 
 // CRC16 implementation according to CCITT standards.

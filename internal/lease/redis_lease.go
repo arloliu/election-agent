@@ -12,10 +12,10 @@ import (
 
 // RedisLease implements Lease interface
 type RedisLease struct {
-	id     uint64
-	kind   string
 	mutex  driver.Mutex
 	driver driver.KVDriver
+	kind   string
+	id     uint64
 }
 
 var _ Lease = (*RedisLease)(nil)
