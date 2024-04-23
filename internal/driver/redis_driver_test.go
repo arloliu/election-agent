@@ -110,8 +110,8 @@ func TestRedisKVDriver_MGet(t *testing.T) {
 	ctx := context.TODO()
 	driver := NewMockRedisKVDriver(&config.Config{})
 
-	connSet(driver, require, "key1", "val1")
-	connSet(driver, require, "key2", "val2")
+	masterConnSet(driver, require, "key1", "val1")
+	masterConnSet(driver, require, "key2", "val2")
 	vals, err := driver.MGet(ctx, "key1", "key2")
 	require.NoError(err)
 	require.Equal("val1", vals[0])
@@ -125,7 +125,7 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 
 	n, err := driver.MSet(ctx, "key1", "val1", "key2", "val2")
 	require.NoError(err)
-	require.Equal(len(driver.connShards), n)
+	require.Equal(len(driver.connShards[0]), n)
 
 	vals, err := driver.MGet(ctx, "key1", "key2")
 	require.NoError(err)
@@ -134,9 +134,15 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 }
 
 func connSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
-	for _, connShards := range driver.connShards {
-		require.LessOrEqual(1, len(connShards))
-		conn := connShards[0]
+	for _, conn := range driver.connShards.Conns(key) {
+		ok, err := conn.WithContext(driver.ctx).Set(key, val)
+		require.NoError(err)
+		require.True(ok)
+	}
+}
+
+func masterConnSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
+	for _, conn := range driver.connShards[0] {
 		ok, err := conn.WithContext(driver.ctx).Set(key, val)
 		require.NoError(err)
 		require.True(ok)
