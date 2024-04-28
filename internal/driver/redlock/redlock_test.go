@@ -11,7 +11,7 @@ import (
 
 func mockConnGet(t *testing.T, key string) *MockConn {
 	mockConn := NewMockConn(t)
-	mockConn.On("Get", mock.AnythingOfType("string")).Return(key, nil)
+	mockConn.On("Get", mock.Anything, mock.AnythingOfType("string")).Return(key, nil)
 	return mockConn
 }
 

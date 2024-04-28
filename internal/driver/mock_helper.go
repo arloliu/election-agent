@@ -44,12 +44,10 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 
 	mockConn := &mockMutexConn{}
 
-	mockConn.On("WithContext", mock.Anything).Return(mockConn)
-
 	mockConn.On("Close").Return(nil)
 
-	mockConn.On("Get", mock.AnythingOfType("string")).
-		Return(func(name string) (string, error) {
+	mockConn.On("Get", mock.Anything, mock.AnythingOfType("string")).
+		Return(func(_ context.Context, name string) (string, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -67,8 +65,8 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return item.val, nil
 		})
 
-	mockConn.On("Set", mock.AnythingOfType("string"), mock.AnythingOfType("string")).
-		Return(func(name string, value string) (bool, error) {
+	mockConn.On("Set", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		Return(func(_ context.Context, name string, value string) (bool, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -76,8 +74,8 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return true, nil
 		})
 
-	mockConn.On("SetNX", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration")).
-		Return(func(name string, value string, expiry time.Duration) (bool, error) {
+	mockConn.On("SetNX", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration")).
+		Return(func(_ context.Context, name string, value string, expiry time.Duration) (bool, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -90,8 +88,8 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return true, nil
 		})
 
-	mockConn.On("PTTL", mock.AnythingOfType("string")).
-		Return(func(name string) (time.Duration, error) {
+	mockConn.On("PTTL", mock.Anything, mock.AnythingOfType("string")).
+		Return(func(_ context.Context, name string) (time.Duration, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -108,8 +106,8 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return time.Until(item.active.Add(item.ttl)), nil
 		})
 
-	mockConn.On("Eval", mock.Anything, mock.Anything, mock.Anything).
-		Return(func(script *redlock.Script, keysAndArgs ...any) (any, error) {
+	mockConn.On("Eval", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, script *redlock.Script, keysAndArgs ...any) (any, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -167,8 +165,8 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return nil, errors.New("no script")
 		})
 
-	mockConn.On("MGet", mock.Anything).
-		Return(func(keys ...string) ([]string, error) {
+	mockConn.On("MGet", mock.Anything, mock.Anything).
+		Return(func(_ context.Context, keys ...string) ([]string, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
@@ -192,8 +190,8 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return vals, nil
 		})
 
-	mockConn.On("MSet", mock.Anything).
-		Return(func(pairs ...any) (bool, error) {
+	mockConn.On("MSet", mock.Anything, mock.Anything).
+		Return(func(_ context.Context, pairs ...any) (bool, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
 
