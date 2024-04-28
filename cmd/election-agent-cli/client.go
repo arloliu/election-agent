@@ -44,16 +44,6 @@ func marshalProtoJSON(v protoreflect.ProtoMessage) (string, error) {
 }
 
 func marshalJSON(v any) (string, error) {
-	// results := make([]string, 0, len(msgs))
-	// for _, v := range msgs {
-	// 	b, err := marshalJSON(v)
-	// 	if err != nil {
-	// 		return "", err
-	// 	}
-	// 	results = append(results, b)
-	// }
-
-	// return "[" + strings.Join(results, ",") + "]", nil
 	data, err := json.Marshal(v)
 	if err != nil {
 		return "", err

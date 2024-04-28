@@ -19,6 +19,7 @@ func init() {
 	electCmd.AddCommand(resignCmd)
 	electCmd.AddCommand(handoverCmd)
 	electCmd.AddCommand(leaderCmd)
+	electCmd.AddCommand(leadersCmd)
 	electCmd.AddCommand(podsCmd)
 }
 
@@ -234,6 +235,44 @@ func getLeader(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		reportError(err)
 	}
+	fmt.Println(output)
+	return nil
+}
+
+var leadersCmd = &cobra.Command{
+	Use:   "leaders <kind>",
+	Short: "Get the election leaders by kind",
+	Args:  cobra.ExactArgs(1),
+	RunE:  getLeaders,
+}
+
+func getLeaders(cmd *cobra.Command, args []string) error {
+	if Hostname == "" {
+		return errors.New("hostname is required, please use -h or --host to specify hostname")
+	}
+
+	client, err := newGrpcClient(ctx, Hostname)
+	if err != nil {
+		reportError(err)
+	}
+
+	req := &eagrpc.ListLeadersRequest{
+		Kind: args[0],
+	}
+	result, err := client.Election.ListLeaders(ctx, req)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			fmt.Println(`{"leaders":[]}`)
+			return nil
+		}
+		reportError(err)
+	}
+
+	output, err := marshalProtoJSON(result)
+	if err != nil {
+		reportError(err)
+	}
+
 	fmt.Println(output)
 	return nil
 }
