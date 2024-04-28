@@ -69,6 +69,13 @@ func (cfg *Config) LeaseKey(lease string, kind string) string {
 	return cfg.KeyPrefix + "/lease/" + kind + "/" + lease
 }
 
+func (cfg *Config) LeaseKindPrefix(kind string) string {
+	if kind == "" {
+		kind = "default"
+	}
+	return cfg.KeyPrefix + "/lease/" + kind + "/"
+}
+
 // Kubernetes related settings
 type KubeConfig struct {
 	Enable bool `default:"true" yaml:"enable"` // Whether to enable k8s service. Defaults to `true`.

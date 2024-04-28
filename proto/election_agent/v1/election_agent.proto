@@ -109,12 +109,24 @@ message GetPodsRequest {
   string deployment = 2;
 }
 
+message ListLeadersRequest {
+  string kind = 1;
+}
+
+message Leader {
+  string election = 1;
+  string name = 2;
+}
+message Leaders {
+  repeated Leader leaders = 1;
+}
 service Election {
   rpc Campaign(CampaignRequest) returns (CampaignResult);
   rpc ExtendElectedTerm(ExtendElectedTermRequest) returns (BoolValue);
   rpc Resign(ResignRequest) returns (BoolValue);
   rpc Handover(HandoverRequest) returns (BoolValue);
   rpc GetLeader(GetLeaderRequest) returns (StringValue);
+  rpc ListLeaders(ListLeadersRequest) returns (Leaders);
   rpc GetPods(GetPodsRequest) returns (Pods);
 }
 

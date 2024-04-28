@@ -160,6 +160,22 @@ func (s *ElectionGRPCService) GetLeader(ctx context.Context, req *pb.GetLeaderRe
 	return &pb.StringValue{Value: leader}, nil
 }
 
+func (s *ElectionGRPCService) ListLeaders(ctx context.Context, req *pb.ListLeadersRequest) (*pb.Leaders, error) {
+	holders, err := s.leaseMgr.GetLeaseHolders(ctx, req.Kind)
+	if err != nil {
+		if lease.IsUnavailableError(err) {
+			return &pb.Leaders{Leaders: []*pb.Leader{}}, status.Error(codes.FailedPrecondition, err.Error())
+		}
+		return &pb.Leaders{Leaders: []*pb.Leader{}}, status.Errorf(codes.Unknown, err.Error())
+	}
+
+	leaders := make([]*pb.Leader, len(holders))
+	for i, holder := range holders {
+		leaders[i] = &pb.Leader{Election: holder.Election, Name: holder.Name}
+	}
+	return &pb.Leaders{Leaders: leaders}, nil
+}
+
 func (s *ElectionGRPCService) GetPods(ctx context.Context, req *pb.GetPodsRequest) (*pb.Pods, error) {
 	if !s.cfg.Kube.Enable || s.kubeClient == nil {
 		return nil, status.Errorf(codes.Unimplemented, "method GetPods not implemented")

@@ -17,7 +17,7 @@ var acquireScript = NewScript(1, `
 `)
 
 func (m *Mutex) acquire(ctx context.Context, conn Conn, value string) (bool, error) {
-	reply, err := conn.WithContext(ctx).Eval(acquireScript, m.name, value, int(m.expiry/time.Millisecond))
+	reply, err := conn.Eval(ctx, acquireScript, m.name, value, int(m.expiry/time.Millisecond))
 	if err != nil {
 		return false, err
 	}
@@ -37,7 +37,7 @@ var deleteScript = NewScript(1, `
 `)
 
 func (m *Mutex) release(ctx context.Context, conn Conn, value string) (bool, error) {
-	status, err := conn.WithContext(ctx).Eval(deleteScript, m.name, value)
+	status, err := conn.Eval(ctx, deleteScript, m.name, value)
 	if err != nil {
 		return false, err
 	}
@@ -59,7 +59,7 @@ var touchScript = NewScript(1, `
 `)
 
 func (m *Mutex) touch(ctx context.Context, conn Conn, value string, expiry int) (bool, error) {
-	status, err := conn.WithContext(ctx).Eval(touchScript, m.name, value, expiry)
+	status, err := conn.Eval(ctx, touchScript, m.name, value, expiry)
 	if err != nil {
 		return false, err
 	}
@@ -72,7 +72,7 @@ var handoverScript = NewScript(1, `
 `)
 
 func (m *Mutex) handover(ctx context.Context, conn Conn, value string, expiry int) (bool, error) {
-	status, err := conn.WithContext(ctx).Eval(handoverScript, m.name, value, expiry)
+	status, err := conn.Eval(ctx, handoverScript, m.name, value, expiry)
 	if err != nil {
 		return false, err
 	}

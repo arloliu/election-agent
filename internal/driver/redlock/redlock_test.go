@@ -1,6 +1,7 @@
 package redlock
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -24,11 +25,12 @@ func TestRedlock_shufflePool(t *testing.T) {
 	rlock := New(connShards...)
 	require.NotNil(rlock)
 
+	ctx := context.TODO()
 	for _, pool := range rlock.shuffleConnPool {
 		for i := 0; i < len(pool[0]); i++ {
-			key1, _ := pool[0][i].Get("")
-			key2, _ := pool[1][i].Get("")
-			key3, _ := pool[2][i].Get("")
+			key1, _ := pool[0][i].Get(ctx, "")
+			key2, _ := pool[1][i].Get(ctx, "")
+			key3, _ := pool[2][i].Get(ctx, "")
 			require.Equal(key1, key2)
 			require.Equal(key2, key3)
 		}

@@ -32,9 +32,9 @@ func (_m *MockConn) Close(ctx context.Context) error {
 	return r0
 }
 
-// Eval provides a mock function with given fields: script, keysAndArgs
-func (_m *MockConn) Eval(script *Script, keysAndArgs ...interface{}) (interface{}, error) {
-	ret := _m.Called(script, keysAndArgs)
+// Eval provides a mock function with given fields: ctx, script, keysAndArgs
+func (_m *MockConn) Eval(ctx context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
+	ret := _m.Called(ctx, script, keysAndArgs)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Eval")
@@ -42,19 +42,19 @@ func (_m *MockConn) Eval(script *Script, keysAndArgs ...interface{}) (interface{
 
 	var r0 interface{}
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*Script, ...interface{}) (interface{}, error)); ok {
-		return rf(script, keysAndArgs...)
+	if rf, ok := ret.Get(0).(func(context.Context, *Script, ...interface{}) (interface{}, error)); ok {
+		return rf(ctx, script, keysAndArgs...)
 	}
-	if rf, ok := ret.Get(0).(func(*Script, ...interface{}) interface{}); ok {
-		r0 = rf(script, keysAndArgs...)
+	if rf, ok := ret.Get(0).(func(context.Context, *Script, ...interface{}) interface{}); ok {
+		r0 = rf(ctx, script, keysAndArgs...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(interface{})
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*Script, ...interface{}) error); ok {
-		r1 = rf(script, keysAndArgs...)
+	if rf, ok := ret.Get(1).(func(context.Context, *Script, ...interface{}) error); ok {
+		r1 = rf(ctx, script, keysAndArgs...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -62,9 +62,9 @@ func (_m *MockConn) Eval(script *Script, keysAndArgs ...interface{}) (interface{
 	return r0, r1
 }
 
-// Get provides a mock function with given fields: name
-func (_m *MockConn) Get(name string) (string, error) {
-	ret := _m.Called(name)
+// Get provides a mock function with given fields: ctx, name
+func (_m *MockConn) Get(ctx context.Context, name string) (string, error) {
+	ret := _m.Called(ctx, name)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
@@ -72,17 +72,17 @@ func (_m *MockConn) Get(name string) (string, error) {
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string) (string, error)); ok {
-		return rf(name)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return rf(ctx, name)
 	}
-	if rf, ok := ret.Get(0).(func(string) string); ok {
-		r0 = rf(name)
+	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = rf(ctx, name)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(name)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, name)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -90,9 +90,9 @@ func (_m *MockConn) Get(name string) (string, error) {
 	return r0, r1
 }
 
-// MGet provides a mock function with given fields: keys
-func (_m *MockConn) MGet(keys ...string) ([]string, error) {
-	ret := _m.Called(keys)
+// MGet provides a mock function with given fields: ctx, keys
+func (_m *MockConn) MGet(ctx context.Context, keys ...string) ([]string, error) {
+	ret := _m.Called(ctx, keys)
 
 	if len(ret) == 0 {
 		panic("no return value specified for MGet")
@@ -100,19 +100,19 @@ func (_m *MockConn) MGet(keys ...string) ([]string, error) {
 
 	var r0 []string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(...string) ([]string, error)); ok {
-		return rf(keys...)
+	if rf, ok := ret.Get(0).(func(context.Context, ...string) ([]string, error)); ok {
+		return rf(ctx, keys...)
 	}
-	if rf, ok := ret.Get(0).(func(...string) []string); ok {
-		r0 = rf(keys...)
+	if rf, ok := ret.Get(0).(func(context.Context, ...string) []string); ok {
+		r0 = rf(ctx, keys...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]string)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(...string) error); ok {
-		r1 = rf(keys...)
+	if rf, ok := ret.Get(1).(func(context.Context, ...string) error); ok {
+		r1 = rf(ctx, keys...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -120,9 +120,9 @@ func (_m *MockConn) MGet(keys ...string) ([]string, error) {
 	return r0, r1
 }
 
-// MSet provides a mock function with given fields: pairs
-func (_m *MockConn) MSet(pairs ...interface{}) (bool, error) {
-	ret := _m.Called(pairs)
+// MSet provides a mock function with given fields: ctx, pairs
+func (_m *MockConn) MSet(ctx context.Context, pairs ...interface{}) (bool, error) {
+	ret := _m.Called(ctx, pairs)
 
 	if len(ret) == 0 {
 		panic("no return value specified for MSet")
@@ -130,17 +130,17 @@ func (_m *MockConn) MSet(pairs ...interface{}) (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(...interface{}) (bool, error)); ok {
-		return rf(pairs...)
+	if rf, ok := ret.Get(0).(func(context.Context, ...interface{}) (bool, error)); ok {
+		return rf(ctx, pairs...)
 	}
-	if rf, ok := ret.Get(0).(func(...interface{}) bool); ok {
-		r0 = rf(pairs...)
+	if rf, ok := ret.Get(0).(func(context.Context, ...interface{}) bool); ok {
+		r0 = rf(ctx, pairs...)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(...interface{}) error); ok {
-		r1 = rf(pairs...)
+	if rf, ok := ret.Get(1).(func(context.Context, ...interface{}) error); ok {
+		r1 = rf(ctx, pairs...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -148,9 +148,9 @@ func (_m *MockConn) MSet(pairs ...interface{}) (bool, error) {
 	return r0, r1
 }
 
-// PTTL provides a mock function with given fields: name
-func (_m *MockConn) PTTL(name string) (time.Duration, error) {
-	ret := _m.Called(name)
+// PTTL provides a mock function with given fields: ctx, name
+func (_m *MockConn) PTTL(ctx context.Context, name string) (time.Duration, error) {
+	ret := _m.Called(ctx, name)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PTTL")
@@ -158,17 +158,17 @@ func (_m *MockConn) PTTL(name string) (time.Duration, error) {
 
 	var r0 time.Duration
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string) (time.Duration, error)); ok {
-		return rf(name)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (time.Duration, error)); ok {
+		return rf(ctx, name)
 	}
-	if rf, ok := ret.Get(0).(func(string) time.Duration); ok {
-		r0 = rf(name)
+	if rf, ok := ret.Get(0).(func(context.Context, string) time.Duration); ok {
+		r0 = rf(ctx, name)
 	} else {
 		r0 = ret.Get(0).(time.Duration)
 	}
 
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(name)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, name)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -176,9 +176,9 @@ func (_m *MockConn) PTTL(name string) (time.Duration, error) {
 	return r0, r1
 }
 
-// Ping provides a mock function with given fields:
-func (_m *MockConn) Ping() (bool, error) {
-	ret := _m.Called()
+// Ping provides a mock function with given fields: ctx
+func (_m *MockConn) Ping(ctx context.Context) (bool, error) {
+	ret := _m.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Ping")
@@ -186,17 +186,17 @@ func (_m *MockConn) Ping() (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func() (bool, error)); ok {
-		return rf()
+	if rf, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return rf(ctx)
 	}
-	if rf, ok := ret.Get(0).(func() bool); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = rf(ctx)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -204,9 +204,46 @@ func (_m *MockConn) Ping() (bool, error) {
 	return r0, r1
 }
 
-// Set provides a mock function with given fields: name, value
-func (_m *MockConn) Set(name string, value string) (bool, error) {
-	ret := _m.Called(name, value)
+// Scan provides a mock function with given fields: ctx, cursor, match, count
+func (_m *MockConn) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	ret := _m.Called(ctx, cursor, match, count)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Scan")
+	}
+
+	var r0 []string
+	var r1 uint64
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, uint64, string, int64) ([]string, uint64, error)); ok {
+		return rf(ctx, cursor, match, count)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uint64, string, int64) []string); ok {
+		r0 = rf(ctx, cursor, match, count)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uint64, string, int64) uint64); ok {
+		r1 = rf(ctx, cursor, match, count)
+	} else {
+		r1 = ret.Get(1).(uint64)
+	}
+
+	if rf, ok := ret.Get(2).(func(context.Context, uint64, string, int64) error); ok {
+		r2 = rf(ctx, cursor, match, count)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Set provides a mock function with given fields: ctx, name, value
+func (_m *MockConn) Set(ctx context.Context, name string, value string) (bool, error) {
+	ret := _m.Called(ctx, name, value)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Set")
@@ -214,17 +251,17 @@ func (_m *MockConn) Set(name string, value string) (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string) (bool, error)); ok {
-		return rf(name, value)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (bool, error)); ok {
+		return rf(ctx, name, value)
 	}
-	if rf, ok := ret.Get(0).(func(string, string) bool); ok {
-		r0 = rf(name, value)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) bool); ok {
+		r0 = rf(ctx, name, value)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(name, value)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, name, value)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -232,9 +269,9 @@ func (_m *MockConn) Set(name string, value string) (bool, error) {
 	return r0, r1
 }
 
-// SetNX provides a mock function with given fields: name, value, expiry
-func (_m *MockConn) SetNX(name string, value string, expiry time.Duration) (bool, error) {
-	ret := _m.Called(name, value, expiry)
+// SetNX provides a mock function with given fields: ctx, name, value, expiry
+func (_m *MockConn) SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error) {
+	ret := _m.Called(ctx, name, value, expiry)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetNX")
@@ -242,42 +279,22 @@ func (_m *MockConn) SetNX(name string, value string, expiry time.Duration) (bool
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string, time.Duration) (bool, error)); ok {
-		return rf(name, value, expiry)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) (bool, error)); ok {
+		return rf(ctx, name, value, expiry)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, time.Duration) bool); ok {
-		r0 = rf(name, value, expiry)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) bool); ok {
+		r0 = rf(ctx, name, value, expiry)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, time.Duration) error); ok {
-		r1 = rf(name, value, expiry)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Duration) error); ok {
+		r1 = rf(ctx, name, value, expiry)
 	} else {
 		r1 = ret.Error(1)
 	}
 
 	return r0, r1
-}
-
-// WithContext provides a mock function with given fields: ctx
-func (_m *MockConn) WithContext(ctx context.Context) Conn {
-	ret := _m.Called(ctx)
-
-	if len(ret) == 0 {
-		panic("no return value specified for WithContext")
-	}
-
-	var r0 Conn
-	if rf, ok := ret.Get(0).(func(context.Context) Conn); ok {
-		r0 = rf(ctx)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(Conn)
-		}
-	}
-
-	return r0
 }
 
 // NewMockConn creates a new instance of MockConn. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

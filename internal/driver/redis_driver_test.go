@@ -59,33 +59,33 @@ func TestRedisKVDriver_IsUnhealthy(t *testing.T) {
 func TestRedisKVDriver_mocks(t *testing.T) {
 	require := require.New(t)
 	ctx := context.TODO()
-	conn := NewMockRedlockConn().WithContext(ctx)
+	conn := NewMockRedlockConn()
 
-	ok, err := conn.Set("key1", "val1")
+	ok, err := conn.Set(ctx, "key1", "val1")
 	require.NoError(err)
 	require.True(ok)
 
-	v, err := conn.Get("key1")
+	v, err := conn.Get(ctx, "key1")
 	require.NoError(err)
 	require.Equal("val1", v)
 
-	ok, err = conn.SetNX("key1", "val2", time.Second)
+	ok, err = conn.SetNX(ctx, "key1", "val2", time.Second)
 	require.NoError(err)
 	require.False(ok)
 
-	ok, err = conn.SetNX("key2", "val2", time.Second)
+	ok, err = conn.SetNX(ctx, "key2", "val2", time.Second)
 	require.NoError(err)
 	require.True(ok)
 
-	ttl, err := conn.PTTL("key3")
+	ttl, err := conn.PTTL(ctx, "key3")
 	require.NoError(err)
 	require.Equal(time.Duration(-2), ttl)
 
-	ttl, err = conn.PTTL("key1")
+	ttl, err = conn.PTTL(ctx, "key1")
 	require.NoError(err)
 	require.Equal(time.Duration(-1), ttl)
 
-	ttl, err = conn.PTTL("key2")
+	ttl, err = conn.PTTL(ctx, "key2")
 	require.NoError(err)
 	require.LessOrEqual(ttl, time.Second)
 }
@@ -135,7 +135,7 @@ func TestRedisKVDriver_MSet(t *testing.T) {
 
 func connSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
 	for _, conn := range driver.connShards.Conns(key) {
-		ok, err := conn.WithContext(driver.ctx).Set(key, val)
+		ok, err := conn.Set(driver.ctx, key, val)
 		require.NoError(err)
 		require.True(ok)
 	}
@@ -143,7 +143,7 @@ func connSet(driver *RedisKVDriver, require *require.Assertions, key string, val
 
 func masterConnSet(driver *RedisKVDriver, require *require.Assertions, key string, val string) {
 	for _, conn := range driver.connShards[0] {
-		ok, err := conn.WithContext(driver.ctx).Set(key, val)
+		ok, err := conn.Set(driver.ctx, key, val)
 		require.NoError(err)
 		require.True(ok)
 	}
@@ -167,11 +167,11 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	for _, connShards := range driver.connShards {
 		require.LessOrEqual(1, len(connShards))
 		conn := connShards[0]
-		result, err := conn.WithContext(ctx).Ping()
+		result, err := conn.Ping(ctx)
 		require.Error(err)
 		require.False(result)
 
-		ok, err := conn.WithContext(ctx).SetNX("test", "value", 10*time.Second)
+		ok, err := conn.SetNX(ctx, "test", "value", 10*time.Second)
 		require.False(ok)
 		require.Error(err)
 	}

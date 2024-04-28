@@ -16,7 +16,6 @@ import (
 
 // goredisConn implements `Conn` interface
 type goredisConn struct {
-	ctx      context.Context
 	delegate redis.UniversalClient
 }
 
@@ -45,37 +44,32 @@ func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, err
 			opts.ContextTimeoutEnabled = true
 			opts.DisableIndentity = true
 			client := redis.NewUniversalClient(opts)
-			connShards[idx] = append(connShards[idx], &goredisConn{ctx: ctx, delegate: client})
+			connShards[idx] = append(connShards[idx], &goredisConn{delegate: client})
 		}
 	}
 
 	return connShards, nil
 }
 
-func (c *goredisConn) WithContext(ctx context.Context) Conn {
-	c.ctx = ctx
-	return c
-}
-
-func (c *goredisConn) Get(name string) (string, error) {
-	value, err := c.delegate.Get(c.ctx, name).Result()
+func (c *goredisConn) Get(ctx context.Context, name string) (string, error) {
+	value, err := c.delegate.Get(ctx, name).Result()
 	return value, noErrNil(err)
 }
 
-func (c *goredisConn) Set(name string, value string) (bool, error) {
-	reply, err := c.delegate.Set(c.ctx, name, value, 0).Result()
+func (c *goredisConn) Set(ctx context.Context, name string, value string) (bool, error) {
+	reply, err := c.delegate.Set(ctx, name, value, 0).Result()
 	return reply == "OK", err
 }
 
-func (c *goredisConn) SetNX(name string, value string, expiry time.Duration) (bool, error) {
-	return c.delegate.SetNX(c.ctx, name, value, expiry).Result()
+func (c *goredisConn) SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error) {
+	return c.delegate.SetNX(ctx, name, value, expiry).Result()
 }
 
-func (c *goredisConn) PTTL(name string) (time.Duration, error) {
-	return c.delegate.PTTL(c.ctx, name).Result()
+func (c *goredisConn) PTTL(ctx context.Context, name string) (time.Duration, error) {
+	return c.delegate.PTTL(ctx, name).Result()
 }
 
-func (c *goredisConn) Eval(script *Script, keysAndArgs ...interface{}) (interface{}, error) {
+func (c *goredisConn) Eval(ctx context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
 	keys := make([]string, script.KeyCount)
 	args := keysAndArgs
 
@@ -86,9 +80,9 @@ func (c *goredisConn) Eval(script *Script, keysAndArgs ...interface{}) (interfac
 		args = keysAndArgs[script.KeyCount:]
 	}
 
-	v, err := c.delegate.EvalSha(c.ctx, script.Hash, keys, args...).Result()
+	v, err := c.delegate.EvalSha(ctx, script.Hash, keys, args...).Result()
 	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
-		v, err = c.delegate.Eval(c.ctx, script.Src, keys, args...).Result()
+		v, err = c.delegate.Eval(ctx, script.Src, keys, args...).Result()
 	}
 	return v, noErrNil(err)
 }
@@ -97,13 +91,13 @@ func (c *goredisConn) Close(_ context.Context) error {
 	return c.delegate.Close()
 }
 
-func (c *goredisConn) Ping() (bool, error) {
-	value, err := c.delegate.Ping(c.ctx).Result()
+func (c *goredisConn) Ping(ctx context.Context) (bool, error) {
+	value, err := c.delegate.Ping(ctx).Result()
 	return value == "PONG", err
 }
 
-func (c *goredisConn) MGet(keys ...string) ([]string, error) {
-	vals, err := c.delegate.MGet(c.ctx, keys...).Result()
+func (c *goredisConn) MGet(ctx context.Context, keys ...string) ([]string, error) {
+	vals, err := c.delegate.MGet(ctx, keys...).Result()
 	err = noErrNil(err)
 
 	strs := make([]string, len(vals))
@@ -118,9 +112,13 @@ func (c *goredisConn) MGet(keys ...string) ([]string, error) {
 	return strs, noErrNil(err)
 }
 
-func (c *goredisConn) MSet(pairs ...any) (bool, error) {
-	reply, err := c.delegate.MSet(c.ctx, pairs...).Result()
+func (c *goredisConn) MSet(ctx context.Context, pairs ...any) (bool, error) {
+	reply, err := c.delegate.MSet(ctx, pairs...).Result()
 	return reply == "OK", err
+}
+
+func (c *goredisConn) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	return c.delegate.Scan(ctx, cursor, match, count).Result()
 }
 
 func noErrNil(err error) error {

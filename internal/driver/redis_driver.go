@@ -16,6 +16,7 @@ import (
 	"election-agent/internal/logging"
 
 	"github.com/dolthub/maphash"
+	"golang.org/x/sync/errgroup"
 )
 
 // RedisKVDriver implements KVDriver interface
@@ -117,6 +118,88 @@ func (rd *RedisKVDriver) GetHolder(ctx context.Context, name string, kind string
 	ctx, cancel := context.WithTimeout(ctx, rd.cfg.Redis.OpearationTimeout)
 	defer cancel()
 	return rd.rlock.Get(ctx, rd.cfg.LeaseKey(name, kind))
+}
+
+func (rd *RedisKVDriver) GetHolders(ctx context.Context, kind string) ([]Holder, error) {
+	ctx, cancel := context.WithTimeout(ctx, rd.cfg.Redis.OpearationTimeout*2)
+	defer cancel()
+
+	type holderInfo struct {
+		val   string
+		count int
+	}
+
+	holders := make([]Holder, 0)
+	holderMap := make(map[string]*holderInfo, 0)
+	match := rd.cfg.LeaseKindPrefix(kind) + "*"
+
+	var mu sync.Mutex
+	for _, connGroup := range rd.rlock.GetConnShards() {
+		errs, ctx := errgroup.WithContext(ctx)
+		for _, conn := range connGroup {
+			conn := conn
+			errs.Go(func() error {
+				var cursor uint64
+
+				holderSet := make(map[string]struct{}, 0)
+				for {
+					var err error
+					var keys []string
+					keys, cursor, err = conn.Scan(ctx, cursor, match, 50)
+					if err != nil {
+						return err
+					}
+
+					if len(keys) == 0 {
+						if cursor == 0 {
+							break
+						}
+						continue
+					}
+					var vals []string
+					vals, err = conn.MGet(ctx, keys...)
+					if err != nil {
+						return err
+					}
+
+					mu.Lock()
+					for i, key := range keys {
+						val := vals[i]
+						if val == "" {
+							continue
+						}
+						if _, ok := holderSet[key]; ok {
+							continue
+						}
+
+						holderSet[key] = struct{}{}
+						if _, ok := holderMap[key]; !ok {
+							holderMap[key] = &holderInfo{val: val, count: 1}
+						} else {
+							holderMap[key].count++
+						}
+					}
+					mu.Unlock()
+
+					if cursor == 0 {
+						break
+					}
+				}
+				return nil
+			})
+		}
+		if err := errs.Wait(); err != nil {
+			return holders, err
+		}
+	}
+
+	quorum := rd.rlock.GetQuorum()
+	for key, info := range holderMap {
+		if info.count >= quorum {
+			holders = append(holders, Holder{Election: key, Name: info.val})
+		}
+	}
+	return holders, nil
 }
 
 func (rd *RedisKVDriver) NewMutex(name string, kind string, holder string, ttl time.Duration) Mutex {

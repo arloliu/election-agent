@@ -165,6 +165,18 @@ func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind st
 	return
 }
 
+func (lm *LeaseManager) GetLeaseHolders(ctx context.Context, kind string) (holders []driver.Holder, err error) {
+	start := time.Now()
+	defer lm.postHook("list_leaders", err == nil, start)
+
+	if err = lm.preHook("list_leaders"); err != nil {
+		return
+	}
+
+	holders, err = lm.driver.GetHolders(ctx, kind)
+	return
+}
+
 func (lm *LeaseManager) preHook(action string) error {
 	lm.metricMgr.RequestBegin(action)
 

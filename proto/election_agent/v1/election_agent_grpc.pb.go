@@ -24,6 +24,7 @@ const (
 	Election_Resign_FullMethodName            = "/grpc.election_agent.v1.Election/Resign"
 	Election_Handover_FullMethodName          = "/grpc.election_agent.v1.Election/Handover"
 	Election_GetLeader_FullMethodName         = "/grpc.election_agent.v1.Election/GetLeader"
+	Election_ListLeaders_FullMethodName       = "/grpc.election_agent.v1.Election/ListLeaders"
 	Election_GetPods_FullMethodName           = "/grpc.election_agent.v1.Election/GetPods"
 )
 
@@ -36,6 +37,7 @@ type ElectionClient interface {
 	Resign(ctx context.Context, in *ResignRequest, opts ...grpc.CallOption) (*BoolValue, error)
 	Handover(ctx context.Context, in *HandoverRequest, opts ...grpc.CallOption) (*BoolValue, error)
 	GetLeader(ctx context.Context, in *GetLeaderRequest, opts ...grpc.CallOption) (*StringValue, error)
+	ListLeaders(ctx context.Context, in *ListLeadersRequest, opts ...grpc.CallOption) (*Leaders, error)
 	GetPods(ctx context.Context, in *GetPodsRequest, opts ...grpc.CallOption) (*Pods, error)
 }
 
@@ -92,6 +94,15 @@ func (c *electionClient) GetLeader(ctx context.Context, in *GetLeaderRequest, op
 	return out, nil
 }
 
+func (c *electionClient) ListLeaders(ctx context.Context, in *ListLeadersRequest, opts ...grpc.CallOption) (*Leaders, error) {
+	out := new(Leaders)
+	err := c.cc.Invoke(ctx, Election_ListLeaders_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *electionClient) GetPods(ctx context.Context, in *GetPodsRequest, opts ...grpc.CallOption) (*Pods, error) {
 	out := new(Pods)
 	err := c.cc.Invoke(ctx, Election_GetPods_FullMethodName, in, out, opts...)
@@ -110,6 +121,7 @@ type ElectionServer interface {
 	Resign(context.Context, *ResignRequest) (*BoolValue, error)
 	Handover(context.Context, *HandoverRequest) (*BoolValue, error)
 	GetLeader(context.Context, *GetLeaderRequest) (*StringValue, error)
+	ListLeaders(context.Context, *ListLeadersRequest) (*Leaders, error)
 	GetPods(context.Context, *GetPodsRequest) (*Pods, error)
 	mustEmbedUnimplementedElectionServer()
 }
@@ -132,6 +144,9 @@ func (UnimplementedElectionServer) Handover(context.Context, *HandoverRequest) (
 }
 func (UnimplementedElectionServer) GetLeader(context.Context, *GetLeaderRequest) (*StringValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLeader not implemented")
+}
+func (UnimplementedElectionServer) ListLeaders(context.Context, *ListLeadersRequest) (*Leaders, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListLeaders not implemented")
 }
 func (UnimplementedElectionServer) GetPods(context.Context, *GetPodsRequest) (*Pods, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPods not implemented")
@@ -239,6 +254,24 @@ func _Election_GetLeader_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Election_ListLeaders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLeadersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ElectionServer).ListLeaders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Election_ListLeaders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ElectionServer).ListLeaders(ctx, req.(*ListLeadersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Election_GetPods_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPodsRequest)
 	if err := dec(in); err != nil {
@@ -283,6 +316,10 @@ var Election_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLeader",
 			Handler:    _Election_GetLeader_Handler,
+		},
+		{
+			MethodName: "ListLeaders",
+			Handler:    _Election_ListLeaders_Handler,
 		},
 		{
 			MethodName: "GetPods",

@@ -29,7 +29,7 @@ type KVDriver interface {
 
 	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
 	GetHolder(ctx context.Context, name string, kind string) (string, error)
-
+	GetHolders(ctx context.Context, kind string) (holders []Holder, err error)
 	// GetAgentState gets agent state.
 	GetAgentState() (string, error)
 	// GetAgentStatus gets the agent status including state, mode and zone enable status
@@ -51,4 +51,9 @@ type KVDriver interface {
 	SetBool(ctx context.Context, key string, value bool) (int, error)
 	// MSet sets the given keys to their respective values
 	MSet(ctx context.Context, pairs ...any) (int, error)
+}
+
+type Holder struct {
+	Election string
+	Name     string
 }

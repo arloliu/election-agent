@@ -105,6 +105,13 @@ func (r *RedLock) getConns(key string) ([]Conn, int) {
 	return connShards.Conns(key), r.quorum
 }
 
+func (r *RedLock) GetConnShards() ConnShards {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.connShards
+}
+
 func (r *RedLock) SetConnShards(connShards ConnShards) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -132,7 +139,7 @@ func (r *RedLock) SetConnShards(connShards ConnShards) {
 func (r *RedLock) Ping(ctx context.Context) (int, error) {
 	conns := r.getAllConns()
 	return actStatusOpAsync(conns, (len(conns)/2)+1, false, func(conn Conn) (bool, error) {
-		return conn.WithContext(ctx).Ping()
+		return conn.Ping(ctx)
 	})
 }
 
@@ -143,7 +150,7 @@ func (r *RedLock) Get(ctx context.Context, key string) (string, error) {
 
 	conns, quorum := r.getConns(key)
 	_, val, err := actStringOpAsync(conns, quorum, func(conn Conn) (string, error) {
-		return conn.WithContext(ctx).Get(key)
+		return conn.Get(ctx, key)
 	})
 
 	return val, err
@@ -156,7 +163,7 @@ func (r *RedLock) Set(ctx context.Context, key string, value string) (int, error
 
 	conns, quorum := r.getConns(key)
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
-		return conn.WithContext(ctx).Set(key, value)
+		return conn.Set(ctx, key, value)
 	})
 }
 
@@ -167,7 +174,7 @@ func (r *RedLock) SetBool(ctx context.Context, key string, value bool) (int, err
 
 	conns, quorum := r.getConns(key)
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
-		return conn.WithContext(ctx).Set(key, BoolStr(value))
+		return conn.Set(ctx, key, BoolStr(value))
 	})
 }
 
@@ -184,7 +191,7 @@ func (r *RedLock) MGet(ctx context.Context, keys ...string) ([]string, error) {
 	for _, conn := range conns {
 		go func(conn Conn) {
 			rs := result{}
-			rs.reply, rs.err = conn.WithContext(ctx).MGet(keys...)
+			rs.reply, rs.err = conn.MGet(ctx, keys...)
 			ch <- rs
 		}(conn)
 	}
@@ -236,7 +243,7 @@ func (r *RedLock) MSet(ctx context.Context, pairs ...any) (int, error) {
 
 	conns, quorum := r.getMasterConns()
 	return actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
-		return conn.WithContext(ctx).MSet(pairs...)
+		return conn.MSet(ctx, pairs...)
 	})
 }
 

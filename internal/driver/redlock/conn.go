@@ -13,16 +13,16 @@ type RedisPool interface {
 }
 
 type Conn interface {
-	WithContext(ctx context.Context) Conn
-	Get(name string) (string, error)
-	Set(name string, value string) (bool, error)
-	SetNX(name string, value string, expiry time.Duration) (bool, error)
-	Eval(script *Script, keysAndArgs ...any) (any, error)
-	PTTL(name string) (time.Duration, error)
+	Get(ctx context.Context, name string) (string, error)
+	Set(ctx context.Context, name string, value string) (bool, error)
+	SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error)
+	Eval(ctx context.Context, script *Script, keysAndArgs ...any) (any, error)
+	PTTL(ctx context.Context, name string) (time.Duration, error)
 	Close(ctx context.Context) error
-	Ping() (bool, error)
-	MGet(keys ...string) ([]string, error)
-	MSet(pairs ...any) (bool, error)
+	Ping(ctx context.Context) (bool, error)
+	MGet(ctx context.Context, keys ...string) ([]string, error)
+	MSet(ctx context.Context, pairs ...any) (bool, error)
+	Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error)
 }
 
 type (
