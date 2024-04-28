@@ -147,11 +147,11 @@ func (c *grpcBenchmarkClient) CampaignSuccess(idx int, iteration int) error {
 		if code == codes.Canceled {
 			return nil
 		}
-		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
+		return fmt.Errorf("Campaign should successed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
 	}
 
 	if !ret.Elected {
-		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), expected to successed\n", idx, iteration)
+		return fmt.Errorf("Campaign should successed(client: %d, iteration: %d), expected to successed\n", idx, iteration)
 	}
 
 	return nil
@@ -166,10 +166,10 @@ func (c *grpcBenchmarkClient) CampaignFail(idx int, iteration int) error {
 		if code == codes.Canceled {
 			return nil
 		}
-		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
+		return fmt.Errorf("Campaign should failed(client: %d, iteration: %d), error: %w", idx, iteration, err)
 	}
 	if ret.Elected {
-		return fmt.Errorf("Campaign failed(client: %d, iteration: %d), expected to fail\n", idx, iteration)
+		return fmt.Errorf("Campaign should failed(client: %d, iteration: %d)\n", idx, iteration)
 	}
 
 	return nil
@@ -185,11 +185,11 @@ func (c *grpcBenchmarkClient) ExtendElectedTerm(idx int, iteration int) error {
 		if code == codes.Canceled {
 			return err
 		}
-		return fmt.Errorf("ExtendElectedTerm failed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
+		return fmt.Errorf("ExtendElectedTerm should successed(client: %d, iteration: %d), got error: %w", idx, iteration, err)
 	}
 
 	if !ret.Value {
-		return fmt.Errorf("ExtendElectedTerm failed(client: %d, iteration: %d)", idx, iteration)
+		return fmt.Errorf("ExtendElectedTerm should successed(client: %d, iteration: %d)", idx, iteration)
 	}
 
 	return nil
