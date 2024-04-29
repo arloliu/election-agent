@@ -38,6 +38,8 @@ var (
 	displayRPS    bool
 )
 
+var finished atomic.Bool
+
 func init() {
 	rootCmd.AddCommand(simulateCmd)
 	simulateCmd.Flags().BoolVarP(&leaderResign, "resign", "r", false, "resign all election and exit")
@@ -61,21 +63,33 @@ var simulateCmd = &cobra.Command{
 	RunE:  simulateClients,
 }
 
-type candidates struct {
-	mu sync.Mutex
-	m  []*electionCandidate
+type electionCandidate struct {
+	conn   *grpc.ClientConn
+	client eagrpc.ElectionClient
+	active bool
 }
 
-func (c *candidates) members() []*electionCandidate {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.m
+type candidatePeers struct {
+	mu          sync.Mutex
+	candaidates []*electionCandidate
 }
 
-func (c *candidates) setActive(idx int) {
+func (c *candidatePeers) member(idx int) *electionCandidate {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for i, m := range c.m {
+	return c.candaidates[idx]
+}
+
+func (c *candidatePeers) members() []*electionCandidate {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.candaidates
+}
+
+func (c *candidatePeers) setActive(idx int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i, m := range c.candaidates {
 		if i == idx {
 			m.active = true
 		} else {
@@ -86,27 +100,21 @@ func (c *candidates) setActive(idx int) {
 
 type simulateClient struct {
 	ctx      context.Context
-	peers    []*candidates
+	peers    []*candidatePeers
 	reqCount atomic.Int64
-}
-
-type electionCandidate struct {
-	conn   *grpc.ClientConn
-	client eagrpc.ElectionClient
-	active bool
 }
 
 func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 	inst := &simulateClient{
 		ctx:   ctx,
-		peers: make([]*candidates, numClients),
+		peers: make([]*candidatePeers, numClients),
 	}
 
 	svcConfig := `{
 		"methodConfig": [{
 			"name": [{"service": "grpc.election_agent.v1.Control"}, {"service": "grpc.election_agent.v1.Election"}],
 			"waitForReady": true,
-			"timeout": "3s",
+			"timeout": "1s",
 			"retryPolicy": {
 				"maxAttempts": 10,
 				"initialBackoff": "0.1s",
@@ -117,7 +125,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		}]}`
 
 	for i := 0; i < numClients; i++ {
-		inst.peers[i] = &candidates{m: make([]*electionCandidate, numCandidates)}
+		inst.peers[i] = &candidatePeers{candaidates: make([]*electionCandidate, numCandidates)}
 		activeIdx := rand.Intn(numCandidates) //nolint:gosec
 		for j := 0; j < numCandidates; j++ {
 			conn, err := grpc.DialContext(ctx, Hostname,
@@ -128,7 +136,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 				return nil, err
 			}
 
-			inst.peers[i].m[j] = &electionCandidate{
+			inst.peers[i].candaidates[j] = &electionCandidate{
 				conn:   conn,
 				client: eagrpc.NewElectionClient(conn),
 				active: j == activeIdx,
@@ -140,7 +148,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 }
 
 func (s *simulateClient) shutdown() {
-	fmt.Printf("Shutdown %d peers\n", len(s.peers)*numCandidates)
+	fmt.Printf("[%s] Shutdown %d peers\n", now(), len(s.peers)*numCandidates)
 	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 	defer cancel()
 	for i, peer := range s.peers {
@@ -213,6 +221,8 @@ func (s *simulateClient) resignLeaders() error {
 
 func (s *simulateClient) chooseLeader() error {
 	errs, _ := errgroup.WithContext(s.ctx)
+
+	chooseLeaderTimeout := time.Duration(2) * reqTimeout
 	for i, peers := range s.peers {
 		i := i
 		peers := peers
@@ -225,7 +235,7 @@ func (s *simulateClient) chooseLeader() error {
 				var err error
 				for retries := 0; retries < 3; retries++ {
 					err = func() error {
-						ctx, cancel := context.WithTimeout(s.ctx, reqTimeout)
+						ctx, cancel := context.WithTimeout(s.ctx, chooseLeaderTimeout)
 						defer cancel()
 						return s.chooseLeaderAction(ctx, c.client, i, j, retries)
 					}()
@@ -248,10 +258,6 @@ func (s *simulateClient) chooseLeader() error {
 func (s *simulateClient) chooseLeaderAction(ctx context.Context, client eagrpc.ElectionClient, i int, j int, retries int) error {
 	ret, err := client.Handover(ctx, handoverReqN(i, j))
 	info := fmt.Sprintf("(peer: %d, idx: %d, retries: %d)", i, j, retries)
-
-	if err != nil && status.Code(err) == codes.DeadlineExceeded {
-		return nil
-	}
 
 	switch simState {
 	case agent.ActiveState:
@@ -278,46 +284,33 @@ func (s *simulateClient) chooseLeaderAction(ctx context.Context, client eagrpc.E
 	return nil
 }
 
-func (s *simulateClient) peerCampaign() error {
-	errs, _ := errgroup.WithContext(s.ctx)
-	for i, peers := range s.peers {
-		i := i
-		peers := peers
-		errs.Go(func() error {
-			for j, c := range peers.members() {
-				var err error
-				for retries := 0; retries < 3; retries++ {
-					err = func() error {
-						ctx, cancel := context.WithTimeout(s.ctx, reqTimeout)
-						defer cancel()
+func (s *simulateClient) peerCampaign(ctx context.Context, i int, j int) error {
+	var err error
+	client := s.peers[i].member(j)
+	for retries := 0; retries < 3; retries++ {
+		err = func() error {
+			cctx, cancel := context.WithTimeout(ctx, reqTimeout)
+			defer cancel()
 
-						return s.peerCampaignAction(ctx, c, i, j, retries)
-					}()
-					if err == nil {
-						break
-					}
+			return s.peerCampaignAction(cctx, client, i, j)
+		}()
+		if err == nil {
+			break
+		}
 
-					time.Sleep(100 * time.Millisecond)
-				}
-				if err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	return errs.Wait()
+	return err
 }
 
-func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCandidate, i int, j int, retries int) error { //nolint:cyclop
-	info := fmt.Sprintf("(peer: %d, idx: %d, retries: %d)", i, j, retries)
+func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCandidate, i int, j int) error { //nolint:cyclop
+	info := fmt.Sprintf("(peer: %d, candidate: %d)", i, j)
 
 	if c.active {
 		req := extendReqN(i, j)
 		ret, err := c.client.ExtendElectedTerm(ctx, req)
-		if err != nil && status.Code(err) == codes.DeadlineExceeded {
+		// discards error when the simulation finished
+		if err != nil && finished.Load() && (status.Code(err) == codes.DeadlineExceeded || status.Code(err) == codes.Canceled) {
 			return nil
 		}
 
@@ -347,7 +340,8 @@ func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCand
 	} else {
 		req := campReqN(i, j)
 		ret, err := c.client.Campaign(ctx, req)
-		if err != nil && status.Code(err) == codes.DeadlineExceeded {
+		// discards error when the simulation finished
+		if err != nil && finished.Load() && (status.Code(err) == codes.DeadlineExceeded || status.Code(err) == codes.Canceled) {
 			return nil
 		}
 
@@ -381,6 +375,35 @@ func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCand
 	return nil
 }
 
+func (s *simulateClient) simulateWorker(ctx context.Context, i int, j int, resultChan chan<- error) {
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		err := s.peerCampaign(ctx, i, j)
+		if err != nil {
+			if forever {
+				fmt.Printf("[%s] Got error: %s\n", now(), err)
+			} else {
+				resultChan <- err
+				return
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			resultChan <- nil
+			return
+		case <-ticker.C:
+			continue
+		}
+	}
+}
+
+func now() string {
+	return time.Now().Format(time.RFC3339)
+}
+
 func simulateClients(cmd *cobra.Command, args []string) error {
 	var duration time.Duration
 	if leaderResign {
@@ -388,7 +411,7 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Resign all elections, clients: %d, candidates: %d\n", numClients, numCandidates)
 	} else {
 		duration = simDuration
-		fmt.Printf("Simulate %s state has started, clients: %d, candidates: %d, duration: %s, req_timeout:%s, forever:%t\n",
+		fmt.Printf("Simulate %s state has started, clients: %d, candidates: %d, duration: %s, req_timeout: %s, forever: %t\n",
 			simState, numClients, numCandidates, duration.String(), reqTimeout.String(), forever)
 	}
 
@@ -410,53 +433,60 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	start := time.Now()
 	// choose active clients and campaign first
+	start := time.Now()
 	if err := clients.chooseLeader(); err != nil {
+		fmt.Printf("[%s] Got error:%s\n", now(), err)
 		return err
 	}
 	elapsed := time.Since(start)
 	rps := float64(numClients) / elapsed.Seconds()
-	fmt.Printf("[%s] Handover %d leaders took %s, %.1f rps\n", time.Now().Format(time.RFC3339), numClients, elapsed.String(), rps)
+	fmt.Printf("[%s] Handover %d leaders took %s, RPS: %.1f \n", now(), numClients, elapsed.String(), rps)
 
-	// start to simluate
-	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	resultChan := make(chan error)
 
-	cycle := 0
-	cycleStart := time.Now()
-	for {
-		select {
-		case <-ticker.C:
-			if displayRPS {
-				cycle++
-				if cycle%10 == 0 {
-					cycle = 0
+	// start simulation
+	for i := 0; i < numClients; i++ {
+		for j := 0; j < numCandidates; j++ {
+			go clients.simulateWorker(ctx, i, j, resultChan)
+		}
+	}
+
+	if displayRPS {
+		displayTicker := time.NewTicker(2 * time.Second)
+		defer displayTicker.Stop()
+		cycleStart := time.Now()
+		go func() {
+			for range displayTicker.C {
+				if displayRPS {
 					count := clients.reqCount.Swap(0)
 					rps := float64(count) / time.Since(cycleStart).Seconds()
 					cycleStart = time.Now()
-					fmt.Printf("[%s] peer election, %.1f rps\n", time.Now().Format(time.RFC3339), rps)
+					fmt.Printf("[%s] Election RPS: %.1f\n", now(), rps)
 				}
 			}
+		}()
+	}
 
-			err := clients.peerCampaign()
+	for i := 0; i < numClients*numCandidates; i++ {
+		select {
+		case err := <-resultChan:
 			if err != nil {
-				fmt.Printf("[%s] peer campaign fail, error:%s\n", time.Now().Format(time.RFC3339), err.Error())
-				if !forever {
-					ticker.Stop()
-					clients.shutdown()
-					return err
-				}
+				return err
 			}
 		case <-ctx.Done():
-			ticker.Stop()
+			finished.Store(true)
 			clients.shutdown()
-			fmt.Printf("Simulation done\n")
+			fmt.Printf("[%s] Simulation done\n", now())
 			return nil
 		case <-exitSig:
-			fmt.Println("Receive exit signal")
-			ticker.Stop()
+			finished.Store(true)
+			fmt.Printf("[%s] Receive exit signal\n", now())
+			cancel()
 			clients.shutdown()
 			return nil
 		}
 	}
+
+	return nil
 }
