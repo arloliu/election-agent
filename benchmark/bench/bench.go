@@ -29,6 +29,7 @@ type Benchmark struct {
 	client      BenchmarkClient
 	count       atomic.Int32
 	start       time.Time
+	last        time.Time
 	ticker      *time.Ticker
 	lastExtern  []time.Time
 	concurrency int
@@ -88,6 +89,7 @@ func (b *Benchmark) startAsync() error {
 
 	errs, _ := errgroup.WithContext(b.ctx)
 	b.start = time.Now()
+	b.last = b.start
 	for n := 0; n < b.concurrency; n++ {
 		idx := n
 		errs.Go(func() error {
@@ -133,8 +135,10 @@ func (b *Benchmark) startAsync() error {
 }
 
 func (b *Benchmark) reportRPS(finised bool) {
-	elapsed := time.Since(b.start)
-	rps := int64(b.count.Load()) * 1000 / elapsed.Milliseconds()
+	end := time.Now()
+	elapsed := end.Sub(b.start)
+	rps := int64(b.count.Swap(0)) * 1000 / end.Sub(b.last).Milliseconds()
+	b.last = end
 	if finised {
 		fmt.Printf("Benchmark finished, Elasped: %s, %d reqs/sec\n", elapsed, rps)
 	} else {
