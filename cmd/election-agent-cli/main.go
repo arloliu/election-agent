@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -29,7 +28,6 @@ func init() {
 	if err != nil {
 		fmt.Printf("Failed to set GOMAXPROCS, error: %s\n", err)
 	}
-	fmt.Printf("CPU information, GOMAXPROCS: %d, num_cpu: %d\n", runtime.GOMAXPROCS(0), runtime.NumCPU())
 }
 
 func main() {
