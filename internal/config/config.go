@@ -39,8 +39,8 @@ type Config struct {
 	DefaultState string `default:"active" split_words:"true" yaml:"default_state"`
 	// The state cache TTL, set it to zero for disabling state cache.
 	// The state cache will be expired when zone health checker doesn't update state for `StateCacheTTL` duration.
-	// Defaults to `30s`.
-	StateCacheTTL time.Duration `default:"0s" split_words:"true" yaml:"state_cache_ttl"`
+	// Defaults to `10s`.
+	StateCacheTTL time.Duration `default:"10s" split_words:"true" yaml:"state_cache_ttl"`
 
 	Kube   KubeConfig   `yaml:"kube"`   // K8S related settings.
 	GRPC   GRPCConfig   `yaml:"grpc"`   // gRPC service related settings.
