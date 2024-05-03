@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -11,7 +12,7 @@ import (
 
 var (
 	Hostname string
-	ctx      = context.Background()
+	ctx      context.Context
 )
 
 var rootCmd = &cobra.Command{
@@ -31,10 +32,15 @@ func init() {
 }
 
 func main() {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+
 	if err := rootCmd.Execute(); err != nil {
 		reportError(err)
+		cancel()
 		os.Exit(1)
 	}
+	cancel()
 }
 
 func reportError(err error) {
