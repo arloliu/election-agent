@@ -14,7 +14,6 @@ import (
 	"election-agent/internal/logging"
 	"election-agent/internal/metric"
 	"election-agent/internal/zc"
-	eagrpc "election-agent/proto/election_agent/v1"
 
 	mock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -62,7 +61,6 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 		activeZone:    "test-zone2",
 		zcConnected:   true,
 		peerConnected: true,
-		peerStatus:    []*eagrpc.AgentStatus{{State: agent.StandbyState}},
 		mode:          agent.NormalMode,
 		state:         agent.ActiveState,
 	}
@@ -78,8 +76,9 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	require.Equal(agent.NormalMode, status.newMode)
 	updateStatus(status)
 
-	// the ZC is disconnected & peer is standby, should be standby->active
+	// the ZC is disconnected & active zone is zone1, should be standby->active
 	status.zcConnected = false
+	status.activeZone = "test-zone1"
 	status.peerConnected = true
 	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
@@ -135,7 +134,6 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// peer back & peer is active, should be active->standby, orphan->normal
 	status.zcConnected = false
 	status.peerConnected = true
-	status.peerStatus = []*eagrpc.AgentStatus{{State: agent.ActiveState, Mode: agent.NormalMode}}
 	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.StandbyState, status.newState)
 	require.Equal(agent.NormalMode, status.newMode)
@@ -144,7 +142,6 @@ func TestZoneManager_BacicChecks(t *testing.T) {
 	// peer is disconnected again, should be standby->active, normal->orphan
 	status.zcConnected = false
 	status.peerConnected = false
-	status.peerStatus = []*eagrpc.AgentStatus{{State: agent.ActiveState, Mode: agent.NormalMode}}
 	Check(status, cfg, m.kvDriver, m.mockZm, m.lm)
 	require.Equal(agent.ActiveState, status.newState)
 	require.Equal(agent.OrphanMode, status.newMode)

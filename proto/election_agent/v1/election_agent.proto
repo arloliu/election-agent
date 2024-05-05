@@ -133,6 +133,9 @@ service Election {
 message AgentStatus {
   string state = 1;
   string mode = 2;
+  string active_zone = 3;
+  bool zc_connected = 4;
+  bool peer_connected = 5;
 }
 
 service Control {

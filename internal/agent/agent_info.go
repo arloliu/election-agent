@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	pb "election-agent/proto/election_agent/v1"
 )
 
 const (
@@ -26,29 +28,38 @@ var ValidModes = []string{NormalMode, OrphanMode, UnknownMode}
 const (
 	StateKey      = "state"
 	ModeKey       = "mode"
+	ActiveZoneKey = "active_zone"
 	ZoneEnableKey = "zone_enable"
 )
 
 type Status struct {
-	State string
-	Mode  string
-	mu    sync.Mutex
+	State         string
+	Mode          string
+	ActiveZone    string
+	ZcConnected   bool
+	PeerConnected bool
+	mu            sync.Mutex
 }
 
 func (s *Status) Store(status *Status) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	val := status.Load()
-	s.State = val.State
-	s.Mode = val.Mode
+	s.State = status.State
+	s.Mode = status.Mode
+	s.ActiveZone = status.ActiveZone
+	s.ZcConnected = status.ZcConnected
+	s.PeerConnected = status.PeerConnected
 }
 
 func (s *Status) Load() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return Status{State: s.State, Mode: s.Mode, ActiveZone: s.ActiveZone, ZcConnected: s.ZcConnected, PeerConnected: s.PeerConnected}
+}
 
-	return Status{State: s.State, Mode: s.Mode}
+func (s *Status) Proto() *pb.AgentStatus {
+	return &pb.AgentStatus{State: s.State, Mode: s.Mode, ActiveZone: s.ActiveZone, ZcConnected: s.ZcConnected, PeerConnected: s.PeerConnected}
 }
 
 // local agent status instance

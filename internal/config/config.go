@@ -165,8 +165,18 @@ type ZoneConfig struct {
 	// A list of election agent peer gRPC URLs.
 	PeerURLs []string `envconfig:"EA_ZONE_PEER_URLS" yaml:"peer_urls"`
 	// The request timeout of peer.
-	// Defaults to `1s`.
-	PeerTimeout time.Duration `default:"1s" split_words:"true" yaml:"peer_timeout"`
+	// Defaults to `3s`.
+	PeerTimeout time.Duration `default:"3s" split_words:"true" yaml:"peer_timeout"`
+	// The TTL condition for maintaining peer connected status.
+	// The zone manager will maintain the cpeer's connected status if it can retrieve the active zone name within the TTL.
+	// e.g., If this value is set to 60s, the zone manager will report peers as connected status when it
+	// retrieves the status from peers within 60 seconds.
+	// Defaults to `30s`.
+	PeerTTL time.Duration `default:"30s" split_words:"true" yaml:"peer_ttl"`
+
+	// Whether to rebuild driver's connections when it has some backends disconnected
+	// Defaults to `false`.
+	RebuildBackend bool `default:"false" split_words:"true" yaml:"rebuild_backend"`
 }
 
 var Default *Config
@@ -233,4 +243,21 @@ func (cfg *Config) IsTestEnv() bool {
 
 func (cfg *Config) IsBenchmarkEnv() bool {
 	return cfg.Env == "benchmark"
+}
+
+func GrpcClientServiceConfig(timeout time.Duration, maxAttempts int, waitForReady bool) string {
+	cfg := `{
+		"methodConfig": [{
+			"name": [{"service": "grpc.election_agent.v1.Control"}, {"service": "grpc.election_agent.v1.Election"}],
+			"waitForReady": %t,
+			"timeout": "%s",
+			"retryPolicy": {
+				"maxAttempts": %d,
+				"initialBackoff": "0.1s",
+				"maxBackoff": "1s",
+				"backoffMultiplier": 2.0,
+				"retryableStatusCodes": [ "UNAVAILABLE" ]
+			}
+		}]}`
+	return fmt.Sprintf(cfg, waitForReady, timeout, maxAttempts)
 }

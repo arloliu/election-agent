@@ -30,6 +30,8 @@ type KVDriver interface {
 	LeaseID(name string, kind string, holder string, ttl time.Duration) uint64
 	GetHolder(ctx context.Context, name string, kind string) (string, error)
 	GetHolders(ctx context.Context, kind string) (holders []Holder, err error)
+	// GetActiveZone gets agent active zone.
+	GetActiveZone() (string, error)
 	// GetAgentState gets agent state.
 	GetAgentState() (string, error)
 	// GetAgentStatus gets the agent status including state, mode and zone enable status

@@ -32,6 +32,7 @@ type RedisKVDriver struct {
 
 	stateKey      string
 	modeKey       string
+	activeZoneKey string
 	zoneEnableKey string
 }
 
@@ -60,6 +61,7 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 		hostname:      os.Getenv("HOSTNAME"),
 		stateKey:      cfg.AgentInfoKey(agent.StateKey),
 		modeKey:       cfg.AgentInfoKey(agent.ModeKey),
+		activeZoneKey: cfg.AgentInfoKey(agent.ActiveZoneKey),
 		zoneEnableKey: cfg.AgentInfoKey(agent.ZoneEnableKey),
 	}
 
@@ -221,6 +223,10 @@ func (rd *RedisKVDriver) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (rd *RedisKVDriver) GetActiveZone() (string, error) {
+	return rd.Get(rd.ctx, rd.activeZoneKey)
+}
+
 func (rd *RedisKVDriver) GetAgentState() (string, error) {
 	state, err := rd.Get(rd.ctx, rd.stateKey)
 	logging.Debugw("driver GetAgentState", "state", state, "err", err)
@@ -254,8 +260,8 @@ func (rd *RedisKVDriver) SetAgentMode(mode string) error {
 
 func (rd *RedisKVDriver) GetAgentStatus() (*agent.Status, error) {
 	status := &agent.Status{State: agent.UnavailableState, Mode: agent.UnknownMode}
-	replies, err := rd.MGet(rd.ctx, rd.stateKey, rd.modeKey)
-	if err != nil || len(replies) != 2 {
+	replies, err := rd.MGet(rd.ctx, rd.stateKey, rd.modeKey, rd.activeZoneKey)
+	if err != nil || len(replies) != 3 {
 		logging.Debugw("driver: GetAgentStatus got error", "state", status.State, "mode", status.Mode, "error", err)
 		return status, nil
 	}
@@ -266,6 +272,7 @@ func (rd *RedisKVDriver) GetAgentStatus() (*agent.Status, error) {
 	} else {
 		status.State = replies[0]
 		status.Mode = replies[1]
+		status.ActiveZone = replies[2]
 	}
 
 	if status.State == agent.UnavailableState || status.State == "" {
@@ -293,7 +300,7 @@ func (rd *RedisKVDriver) SetAgentStatus(status *agent.Status) error {
 		return nil
 	}
 
-	_, err := rd.MSet(rd.ctx, rd.stateKey, status.State, rd.modeKey, status.Mode)
+	_, err := rd.MSet(rd.ctx, rd.stateKey, status.State, rd.modeKey, status.Mode, rd.activeZoneKey, status.ActiveZone)
 	return err
 }
 
