@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -55,7 +56,7 @@ func (r *RedisError) IsNil() bool {
 // IsMoved checks if it is a redis MOVED message and returns moved address.
 func (r *RedisError) IsMoved() (addr string, ok bool) {
 	if ok = strings.HasPrefix(r.string, "MOVED"); ok {
-		addr = strings.Split(r.string, " ")[2]
+		addr = fixIPv6HostPort(strings.Split(r.string, " ")[2])
 	}
 	return
 }
@@ -63,9 +64,18 @@ func (r *RedisError) IsMoved() (addr string, ok bool) {
 // IsAsk checks if it is a redis ASK message and returns ask address.
 func (r *RedisError) IsAsk() (addr string, ok bool) {
 	if ok = strings.HasPrefix(r.string, "ASK"); ok {
-		addr = strings.Split(r.string, " ")[2]
+		addr = fixIPv6HostPort(strings.Split(r.string, " ")[2])
 	}
 	return
+}
+
+func fixIPv6HostPort(addr string) string {
+	if strings.IndexByte(addr, '.') < 0 && len(addr) > 0 && addr[0] != '[' { // skip ipv4 and enclosed ipv6
+		if i := strings.LastIndexByte(addr, ':'); i >= 0 {
+			return net.JoinHostPort(addr[:i], addr[i+1:])
+		}
+	}
+	return addr
 }
 
 // IsTryAgain checks if it is a redis TRYAGAIN message and returns ask address.
@@ -274,6 +284,16 @@ func (r RedisResult) AsFloatSlice() (v []float64, err error) {
 		err = r.err
 	} else {
 		v, err = r.val.AsFloatSlice()
+	}
+	return
+}
+
+// AsBoolSlice delegates to RedisMessage.AsBoolSlice
+func (r RedisResult) AsBoolSlice() (v []bool, err error) {
+	if r.err != nil {
+		err = r.err
+	} else {
+		v, err = r.val.AsBoolSlice()
 	}
 	return
 }
@@ -743,6 +763,20 @@ func (m *RedisMessage) AsFloatSlice() ([]float64, error) {
 	return s, nil
 }
 
+// AsBoolSlice checks if message is a redis array/set response, and converts it to []bool.
+// Redis nil elements and other non-boolean elements will be represented as false.
+func (m *RedisMessage) AsBoolSlice() ([]bool, error) {
+	values, err := m.ToArray()
+	if err != nil {
+		return nil, err
+	}
+	s := make([]bool, len(values))
+	for i, v := range values {
+		s[i], _ = v.AsBool() // Ignore error, non-boolean values will be false
+	}
+	return s, nil
+}
+
 // XRangeEntry is the element type of both XRANGE and XREVRANGE command response array
 type XRangeEntry struct {
 	FieldValues map[string]string
@@ -990,8 +1024,9 @@ func (m *RedisMessage) AsZMPop() (kvs KeyZScores, err error) {
 }
 
 type FtSearchDoc struct {
-	Doc map[string]string
-	Key string
+	Doc   map[string]string
+	Key   string
+	Score float64
 }
 
 func (m *RedisMessage) AsFtSearch() (total int64, docs []FtSearchDoc, err error) {
@@ -1013,6 +1048,8 @@ func (m *RedisMessage) AsFtSearch() (total int64, docs []FtSearchDoc, err error)
 							docs[d].Key = record.values[j+1].string
 						case "extra_attributes":
 							docs[d].Doc, _ = record.values[j+1].AsStrMap()
+						case "score":
+							docs[d].Score, _ = strconv.ParseFloat(record.values[j+1].string, 64)
 						}
 					}
 				}
@@ -1027,17 +1064,36 @@ func (m *RedisMessage) AsFtSearch() (total int64, docs []FtSearchDoc, err error)
 	}
 	if len(m.values) > 0 {
 		total = m.values[0].integer
-		if len(m.values) > 2 && m.values[2].string == "" {
-			docs = make([]FtSearchDoc, 0, (len(m.values)-1)/2)
-			for i := 1; i < len(m.values); i += 2 {
-				doc, _ := m.values[i+1].AsStrMap()
-				docs = append(docs, FtSearchDoc{Doc: doc, Key: m.values[i].string})
+		wscore := false
+		wattrs := false
+		offset := 1
+		if len(m.values) > 2 {
+			if m.values[2].string == "" {
+				wattrs = true
+				offset++
+			} else {
+				_, err1 := strconv.ParseFloat(m.values[1].string, 64)
+				_, err2 := strconv.ParseFloat(m.values[2].string, 64)
+				wscore = err1 != nil && err2 == nil
+				offset++
 			}
-		} else {
-			docs = make([]FtSearchDoc, 0, len(m.values)-1)
-			for i := 1; i < len(m.values); i++ {
-				docs = append(docs, FtSearchDoc{Doc: nil, Key: m.values[i].string})
+		}
+		if len(m.values) > 3 && m.values[3].string == "" {
+			wattrs = true
+			offset++
+		}
+		docs = make([]FtSearchDoc, 0, (len(m.values)-1)/offset)
+		for i := 1; i < len(m.values); i++ {
+			doc := FtSearchDoc{Key: m.values[i].string}
+			if wscore {
+				i++
+				doc.Score, _ = strconv.ParseFloat(m.values[i].string, 64)
 			}
+			if wattrs {
+				i++
+				doc.Doc, _ = m.values[i].AsStrMap()
+			}
+			docs = append(docs, doc)
 		}
 		return
 	}

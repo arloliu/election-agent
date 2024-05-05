@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
+	"election-agent/internal/config"
 	eagrpc "election-agent/proto/election_agent/v1"
 )
 
@@ -22,9 +24,12 @@ type grpcClient struct {
 func newGrpcClient(ctx context.Context, host string) (*grpcClient, error) {
 	var err error
 	c := &grpcClient{}
+
+	svcConfig := config.GrpcClientServiceConfig(3*time.Second, 10, true)
+
 	c.Conn, err = grpc.DialContext(ctx, host,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+		grpc.WithDefaultServiceConfig(svcConfig),
 	)
 	if err != nil {
 		return nil, err

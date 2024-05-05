@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"election-agent/internal/agent"
+	"election-agent/internal/config"
 	eagrpc "election-agent/proto/election_agent/v1"
 )
 
@@ -110,20 +111,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		peers: make([]*candidatePeers, numClients),
 	}
 
-	svcConfig := `{
-		"methodConfig": [{
-			"name": [{"service": "grpc.election_agent.v1.Control"}, {"service": "grpc.election_agent.v1.Election"}],
-			"waitForReady": true,
-			"timeout": "1s",
-			"retryPolicy": {
-				"maxAttempts": 10,
-				"initialBackoff": "0.1s",
-				"maxBackoff": "1s",
-				"backoffMultiplier": 2.0,
-				"retryableStatusCodes": [ "UNAVAILABLE" ]
-			}
-		}]}`
-
+	svcConfig := config.GrpcClientServiceConfig(3*time.Second, 10, true)
 	for i := 0; i < numClients; i++ {
 		inst.peers[i] = &candidatePeers{candaidates: make([]*electionCandidate, numCandidates)}
 		activeIdx := rand.Intn(numCandidates) //nolint:gosec
@@ -204,9 +192,11 @@ func (s *simulateClient) resignLeaders() error {
 		peers := peers
 		errs.Go(func() error {
 			for j, c := range peers.members() {
+				start := time.Now()
 				if _, err := c.client.Resign(s.ctx, resignReqN(i, j)); err != nil {
 					code := status.Code(err)
 					if code != codes.NotFound && code != codes.FailedPrecondition {
+						fmt.Printf("Resign leader fail, elspsed: %s, error: %s\n", time.Since(start).String(), err.Error())
 						return err
 					}
 				}
@@ -232,6 +222,7 @@ func (s *simulateClient) chooseLeader() error {
 					continue
 				}
 
+				start := time.Now()
 				var err error
 				for retries := 0; retries < 3; retries++ {
 					err = func() error {
@@ -244,6 +235,7 @@ func (s *simulateClient) chooseLeader() error {
 					}
 				}
 				if err != nil {
+					fmt.Printf("Choose leader fail, elapsed: %s, error: %s\n", time.Since(start).String(), err.Error())
 					return err
 				}
 			}
