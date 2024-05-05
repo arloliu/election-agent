@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
 	"election-agent/internal/agent"
-	eagrpc "election-agent/proto/election_agent/v1"
 
 	"go.uber.org/multierr"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
@@ -284,6 +284,31 @@ func waitStatefulSetAvailable(ctx context.Context, cfg *envconf.Config, stsName 
 	return waitStatefulSetScaled(cfg, &sts, expectedReplicas)
 }
 
+func agentStatusIsWithTimes(ctx context.Context, cfg *envconf.Config, agentHost string, state string, mode string, times int) bool {
+	log.Printf("Ensure agent statues, expect agent %s state: %s, mode: %s, timeout: %s with %d times\n", agentHost, state, mode, stateChangeTimeout, times)
+	for i := 0; i < times; i++ {
+		status, err := utilGetAgentStatus(ctx, cfg, agentHost)
+		if err != nil {
+			log.Printf("  ! Unable to get agent status, error: %s\n", err.Error())
+			return false
+		}
+
+		for j, s := range status {
+			if s.State != state || s.Mode != mode {
+				log.Printf("  ! Unmatched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s, activeZone: %s zc: %t, peer: %t\n",
+					j, agentHost, state, s.State, mode, s.Mode, s.ActiveZone, s.ZcConnected, s.PeerConnected)
+				return false
+			} else {
+				log.Printf("  * Matched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s, activeZone: %s zc: %t, peer: %t\n",
+					j, agentHost, state, s.State, mode, s.Mode, s.ActiveZone, s.ZcConnected, s.PeerConnected)
+			}
+		}
+		time.Sleep(time.Second)
+	}
+
+	return true
+}
+
 func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state string, mode string) error {
 	elapsed := time.Now().Add(stateChangeTimeout)
 	agentHost := headlessSvcGRPCHost(cfg, name)
@@ -301,13 +326,17 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 		matched := true
 		for i, s := range status {
 			if s.State != state || s.Mode != mode {
-				log.Printf("  * Unmatched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
+				log.Printf("  * Unmatched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s, activeZone: %s zc: %t, peer: %t\n",
+					i, agentHost, state, s.State, mode, s.Mode, s.ActiveZone, s.ZcConnected, s.PeerConnected)
 				matched = false
 			} else {
-				log.Printf("  * Matched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s\n", i, agentHost, state, s.State, mode, s.Mode)
+				log.Printf("  * Matched[%d], agent %s expected/actual state: %s/%s, mode: %s/%s, activeZone: %s zc: %t, peer: %t\n",
+					i, agentHost, state, s.State, mode, s.Mode, s.ActiveZone, s.ZcConnected, s.PeerConnected)
 			}
 		}
-		if matched {
+
+		times := rand.Intn(7)
+		if matched && agentStatusIsWithTimes(ctx, cfg, agentHost, state, mode, times) {
 			log.Printf("# All Matched(count: %d), agent %s state: %s, mode: %s\n", len(status), agentHost, state, mode)
 			return nil
 		}
@@ -426,7 +455,7 @@ func utilPodExec(ctx context.Context, cfg *envconf.Config, cmd []string) ([]byte
 	stdout, stderr, err := podExec(ctx, cfg, "election-agent-util", "election-agent-util", cmd)
 	elapsed := time.Since(now)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exec command: %s\n  * elapsed:%s\n  * stdout:\n %s\n  * stderr:\n %s\n  * err:\n %w\n",
+		return nil, fmt.Errorf("Failed to exec command: %s\n  * elapsed:%s\n  * stdout:\n %s\n  * stderr:\n %s\n  * err:\n %w\n",
 			strings.Join(cmd, " "), elapsed, string(stdout), string(stderr), err)
 	}
 	log.Printf("Execute pod successed, elapsed: %s, cmd: %s\n", elapsed, strings.Join(cmd, " "))
@@ -444,9 +473,18 @@ func utilGetActiveZone(ctx context.Context, cfg *envconf.Config) (string, error)
 	return strings.Trim(string(stdout), "\n"), nil
 }
 
-func utilGetAgentStatus(ctx context.Context, cfg *envconf.Config, host string) ([]*eagrpc.AgentStatus, error) {
+type agentStatus struct {
+	State         string `json:"state"`
+	Mode          string `json:"mode"`
+	ActiveZone    string `json:"active_zone"`
+	ZcConnected   bool   `json:"zc_connected"`
+	PeerConnected bool   `json:"peer_connected"`
+	Target        string `json:"target"`
+}
+
+func utilGetAgentStatus(ctx context.Context, cfg *envconf.Config, host string) ([]*agentStatus, error) {
 	cmd := []string{"election-agent-cli", "--host", host, "control", "get-status"}
-	status := []*eagrpc.AgentStatus{}
+	status := []*agentStatus{}
 	stdout, err := utilPodExec(ctx, cfg, cmd)
 	if err != nil {
 		return status, err
@@ -469,7 +507,9 @@ func utilSimluate(ctx context.Context, cfg *envconf.Config, host string, state s
 		"--election", election,
 		"--num", fmt.Sprint(numClients),
 		"--candidates", fmt.Sprint(candidates),
-		"--term", "5000",
+		"--camp_timeout", "3s",
+		"--extend_timeout", "3s",
+		"--term", "10000",
 	}
 	stdout, err := utilPodExec(ctx, cfg, cmd)
 	if err != nil {

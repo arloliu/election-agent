@@ -50,6 +50,8 @@ spec:
               value: 1s
             - name: EA_ZONE_PEER_URLS
               value: election-agent-z2:443
+            - name: EA_ZONE_PEER_TTL
+              value: 5s
             - name: EA_ZONE_COORDINATOR_URL
               value: http://zone-coordinator
             - name: EA_ZONE_COORDINATOR_TTL
