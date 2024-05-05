@@ -32,7 +32,8 @@ var (
 	interval      int
 	electionTerm  int
 	simDuration   time.Duration
-	reqTimeout    time.Duration
+	campTimeout   time.Duration
+	extendTimeout time.Duration
 	simState      string
 	leaderResign  bool
 	forever       bool
@@ -41,10 +42,13 @@ var (
 
 var finished atomic.Bool
 
+const ctxSimTimeout = 6 * time.Second
+
 func init() {
 	rootCmd.AddCommand(simulateCmd)
 	simulateCmd.Flags().BoolVarP(&leaderResign, "resign", "r", false, "resign all election and exit")
-	simulateCmd.Flags().DurationVarP(&reqTimeout, "timeout", "o", 1*time.Second, "election request timeout")
+	simulateCmd.Flags().DurationVarP(&campTimeout, "camp_timeout", "a", 1*time.Second, "election campaign request timeout")
+	simulateCmd.Flags().DurationVarP(&extendTimeout, "extend_timeout", "x", 1*time.Second, "election extend request timeout")
 	simulateCmd.Flags().BoolVarP(&forever, "forever", "f", false, "simulate forever even error occurs")
 	simulateCmd.Flags().BoolVarP(&displayRPS, "display", "p", false, "display request per seconds information")
 	simulateCmd.Flags().IntVarP(&numClients, "num", "n", 100, "number of clients")
@@ -111,7 +115,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		peers: make([]*candidatePeers, numClients),
 	}
 
-	svcConfig := config.GrpcClientServiceConfig(3*time.Second, 10, true)
+	svcConfig := config.GrpcClientServiceConfig(ctxSimTimeout, 10, true)
 	for i := 0; i < numClients; i++ {
 		inst.peers[i] = &candidatePeers{candaidates: make([]*electionCandidate, numCandidates)}
 		activeIdx := rand.Intn(numCandidates) //nolint:gosec
@@ -212,7 +216,6 @@ func (s *simulateClient) resignLeaders() error {
 func (s *simulateClient) chooseLeader() error {
 	errs, _ := errgroup.WithContext(s.ctx)
 
-	chooseLeaderTimeout := time.Duration(2) * reqTimeout
 	for i, peers := range s.peers {
 		i := i
 		peers := peers
@@ -226,7 +229,7 @@ func (s *simulateClient) chooseLeader() error {
 				var err error
 				for retries := 0; retries < 3; retries++ {
 					err = func() error {
-						ctx, cancel := context.WithTimeout(s.ctx, chooseLeaderTimeout)
+						ctx, cancel := context.WithTimeout(s.ctx, ctxSimTimeout)
 						defer cancel()
 						return s.chooseLeaderAction(ctx, c.client, i, j, retries)
 					}()
@@ -248,7 +251,10 @@ func (s *simulateClient) chooseLeader() error {
 }
 
 func (s *simulateClient) chooseLeaderAction(ctx context.Context, client eagrpc.ElectionClient, i int, j int, retries int) error {
-	ret, err := client.Handover(ctx, handoverReqN(i, j))
+	hctx, cancel := context.WithTimeout(ctx, campTimeout)
+	defer cancel()
+
+	ret, err := client.Handover(hctx, handoverReqN(i, j))
 	info := fmt.Sprintf("(peer: %d, idx: %d, retries: %d)", i, j, retries)
 
 	switch simState {
@@ -281,7 +287,7 @@ func (s *simulateClient) peerCampaign(ctx context.Context, i int, j int) error {
 	client := s.peers[i].member(j)
 	for retries := 0; retries < 3; retries++ {
 		err = func() error {
-			cctx, cancel := context.WithTimeout(ctx, reqTimeout)
+			cctx, cancel := context.WithTimeout(ctx, ctxSimTimeout)
 			defer cancel()
 
 			return s.peerCampaignAction(cctx, client, i, j)
@@ -299,6 +305,9 @@ func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCand
 	info := fmt.Sprintf("(peer: %d, candidate: %d)", i, j)
 
 	if c.active {
+		ctx, cancel := context.WithTimeout(ctx, extendTimeout)
+		defer cancel()
+
 		req := extendReqN(i, j)
 		ret, err := c.client.ExtendElectedTerm(ctx, req)
 		// discards error when the simulation finished
@@ -330,6 +339,9 @@ func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCand
 			}
 		}
 	} else {
+		ctx, cancel := context.WithTimeout(ctx, campTimeout)
+		defer cancel()
+
 		req := campReqN(i, j)
 		ret, err := c.client.Campaign(ctx, req)
 		// discards error when the simulation finished
@@ -404,7 +416,7 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 	} else {
 		duration = simDuration
 		fmt.Printf("Simulate %s state has started, clients: %d, candidates: %d, duration: %s, req_timeout: %s, forever: %t\n",
-			simState, numClients, numCandidates, duration.String(), reqTimeout.String(), forever)
+			simState, numClients, numCandidates, duration.String(), campTimeout.String(), forever)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)

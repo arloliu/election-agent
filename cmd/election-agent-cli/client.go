@@ -15,6 +15,8 @@ import (
 	eagrpc "election-agent/proto/election_agent/v1"
 )
 
+const ctxTimeout = 3 * time.Second
+
 type grpcClient struct {
 	Conn     *grpc.ClientConn
 	Election eagrpc.ElectionClient
@@ -25,7 +27,7 @@ func newGrpcClient(ctx context.Context, host string) (*grpcClient, error) {
 	var err error
 	c := &grpcClient{}
 
-	svcConfig := config.GrpcClientServiceConfig(3*time.Second, 10, true)
+	svcConfig := config.GrpcClientServiceConfig(ctxTimeout, 10, true)
 
 	c.Conn, err = grpc.DialContext(ctx, host,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
