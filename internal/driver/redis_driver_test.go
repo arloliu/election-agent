@@ -68,26 +68,6 @@ func TestRedisKVDriver_mocks(t *testing.T) {
 	v, err := conn.Get(ctx, "key1")
 	require.NoError(err)
 	require.Equal("val1", v)
-
-	ok, err = conn.SetNX(ctx, "key1", "val2", time.Second)
-	require.NoError(err)
-	require.False(ok)
-
-	ok, err = conn.SetNX(ctx, "key2", "val2", time.Second)
-	require.NoError(err)
-	require.True(ok)
-
-	ttl, err := conn.PTTL(ctx, "key3")
-	require.NoError(err)
-	require.Equal(time.Duration(-2), ttl)
-
-	ttl, err = conn.PTTL(ctx, "key1")
-	require.NoError(err)
-	require.Equal(time.Duration(-1), ttl)
-
-	ttl, err = conn.PTTL(ctx, "key2")
-	require.NoError(err)
-	require.LessOrEqual(ttl, time.Second)
 }
 
 func TestRedisKVDriver_Get(t *testing.T) {
@@ -171,7 +151,7 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 		require.Error(err)
 		require.False(result)
 
-		ok, err := conn.SetNX(ctx, "test", "value", 10*time.Second)
+		ok, err := conn.Set(ctx, "test", "value")
 		require.False(ok)
 		require.Error(err)
 	}

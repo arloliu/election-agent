@@ -15,13 +15,11 @@ import (
 	"election-agent/internal/logging"
 
 	"github.com/redis/rueidis"
-	"github.com/redis/rueidis/rueidiscompat"
 )
 
 // rueidisConn implements `Conn` interface
 type rueidisConn struct {
 	client      rueidis.Client
-	delegate    rueidiscompat.Cmdable
 	opts        *rueidis.ClientOption
 	lastErr     error
 	lastErrTime time.Time
@@ -52,25 +50,22 @@ func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, err
 		if err != nil {
 			logging.Warnw("Failed to create rueidis client", "InitAddress", opts.InitAddress, "error", err)
 		}
-		if client == nil {
-			conns[i] = &rueidisConn{client: nil, delegate: nil, opts: opts, lastErr: err}
-		} else {
-			conns[i] = &rueidisConn{client: client, delegate: rueidiscompat.NewAdapter(client), opts: opts, lastErr: err}
-		}
+
+		conns[i] = &rueidisConn{client: client, opts: opts, lastErr: err}
 	}
 
 	return ConnShards{conns}, nil
 }
 
-func (c *rueidisConn) getInstance() (rueidis.Client, rueidiscompat.Cmdable) {
+func (c *rueidisConn) getClient() rueidis.Client {
 	c.mu.RLock()
-	if c.delegate != nil {
+	if c.client != nil {
 		if isNetOpError(c.lastErr) && time.Since(c.lastErrTime) < time.Second {
 			c.mu.RUnlock()
-			return nil, nil
+			return nil
 		}
 		c.mu.RUnlock()
-		return c.client, c.delegate
+		return c.client
 	}
 	c.mu.RUnlock()
 
@@ -80,23 +75,12 @@ func (c *rueidisConn) getInstance() (rueidis.Client, rueidiscompat.Cmdable) {
 	client, err := rueidis.NewClient(*c.opts)
 	if err != nil {
 		c.lastErr = err
-		return nil, nil
+		return nil
 	}
 
 	c.client = client
-	c.delegate = rueidiscompat.NewAdapter(client)
 	c.lastErr = nil
-	return c.client, c.delegate
-}
-
-func (c *rueidisConn) getDelegate() rueidiscompat.Cmdable {
-	_, delegate := c.getInstance()
-	return delegate
-}
-
-func (c *rueidisConn) getClient() rueidis.Client {
-	client, _ := c.getInstance()
-	return client
+	return c.client
 }
 
 func (c *rueidisConn) checkNetOpError(err error) {
@@ -111,12 +95,12 @@ func (c *rueidisConn) checkNetOpError(err error) {
 }
 
 func (c *rueidisConn) Get(ctx context.Context, name string) (string, error) {
-	delegate := c.getDelegate()
-	if delegate == nil {
+	client := c.getClient()
+	if client == nil {
 		return "", c.lastErr
 	}
 
-	value, err := c.client.Do(ctx, c.client.B().Get().Key(name).Build()).ToString()
+	value, err := client.Do(ctx, client.B().Get().Key(name).Build()).ToString()
 	c.checkNetOpError(err)
 
 	return value, noErrNil(err)
@@ -134,51 +118,14 @@ func (c *rueidisConn) Set(ctx context.Context, name string, value string) (bool,
 	return reply == "OK", err
 }
 
-func (c *rueidisConn) SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error) {
-	client := c.getClient()
-	if client == nil {
-		return false, c.lastErr
-	}
-
-	reply, err := client.Do(ctx, client.B().Set().Key(name).Value(value).Nx().Px(expiry).Build()).ToBool()
-	c.checkNetOpError(err)
-
-	return reply, err
-}
-
-func (c *rueidisConn) PTTL(ctx context.Context, name string) (time.Duration, error) {
+func (c *rueidisConn) Eval(ctx context.Context, script *Script, keys []string, args []string) (any, error) {
 	client := c.getClient()
 	if client == nil {
 		return 0, c.lastErr
 	}
-
-	// reply, err := delegate.PTTL(ctx, name).Result()
-	cmd := client.B().Pttl().Key(name).Cache()
-	reply, err := client.DoCache(ctx, cmd, time.Minute).AsInt64()
-	c.checkNetOpError(err)
-
-	return time.Duration(reply) * time.Millisecond, err
-}
-
-func (c *rueidisConn) Eval(ctx context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
-	delegate := c.getDelegate()
-	if delegate == nil {
-		return nil, c.lastErr
-	}
-
-	keys := make([]string, script.KeyCount)
-	args := keysAndArgs
-
-	if script.KeyCount > 0 {
-		for i := 0; i < script.KeyCount; i++ {
-			keys[i], _ = keysAndArgs[i].(string)
-		}
-		args = keysAndArgs[script.KeyCount:]
-	}
-
-	v, err := delegate.EvalSha(ctx, script.Hash, keys, args...).Result()
+	v, err := client.Do(ctx, client.B().Evalsha().Sha1(script.Hash).Numkeys(int64(len(keys))).Key(keys...).Arg(args...).Build()).ToAny()
 	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
-		v, err = delegate.Eval(ctx, script.Src, keys, args...).Result()
+		v, err = client.Do(ctx, client.B().Eval().Script(script.Src).Numkeys(int64(len(keys))).Key(keys...).Arg(args...).Build()).ToAny()
 	}
 	c.checkNetOpError(err)
 
@@ -186,13 +133,11 @@ func (c *rueidisConn) Eval(ctx context.Context, script *Script, keysAndArgs ...i
 }
 
 func (c *rueidisConn) Close(ctx context.Context) error {
-	delegate := c.getDelegate()
-	if delegate == nil {
-		return c.lastErr
+	client := c.getClient()
+	if client == nil {
+		return nil
 	}
-
-	_, err := delegate.Shutdown(ctx).Result()
-	return err
+	return client.Do(ctx, client.B().Shutdown().Build()).Error()
 }
 
 func (c *rueidisConn) Ping(ctx context.Context) (bool, error) {
@@ -208,50 +153,49 @@ func (c *rueidisConn) Ping(ctx context.Context) (bool, error) {
 }
 
 func (c *rueidisConn) MGet(ctx context.Context, keys ...string) ([]string, error) {
-	delegate := c.getDelegate()
-	if delegate == nil {
+	client := c.getClient()
+	if client == nil {
 		return []string{}, c.lastErr
 	}
 
-	vals, err := delegate.MGet(ctx, keys...).Result()
+	vals, err := client.Do(ctx, client.B().Mget().Key(keys...).Build()).ToArray()
 	c.checkNetOpError(err)
-
-	err = noErrNil(err)
 
 	strs := make([]string, len(vals))
 	for i, v := range vals {
-		var ok bool
-		strs[i], ok = v.(string)
-		if !ok {
-			strs[i] = ""
-		}
+		strs[i], _ = v.ToString()
 	}
 
 	return strs, noErrNil(err)
 }
 
 func (c *rueidisConn) MSet(ctx context.Context, pairs ...any) (bool, error) {
-	delegate := c.getDelegate()
-	if delegate == nil {
+	client := c.getClient()
+	if client == nil {
 		return false, c.lastErr
 	}
 
-	reply, err := delegate.MSet(ctx, pairs...).Result()
+	partial := client.B().Mset().KeyValue()
+	for i := 0; i < len(pairs); i += 2 {
+		partial = partial.KeyValue(pairs[i].(string), pairs[i+1].(string))
+	}
+	cmd := partial.Build()
+	reply, err := client.Do(ctx, cmd).ToString()
 	c.checkNetOpError(err)
 
 	return reply == "OK", err
 }
 
 func (c *rueidisConn) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
-	delegate := c.getDelegate()
-	if delegate == nil {
+	client := c.getClient()
+	if client == nil {
 		return []string{}, 0, c.lastErr
 	}
 
-	results, cursor, err := delegate.Scan(ctx, cursor, match, count).Result()
+	resp, err := client.Do(ctx, client.B().Scan().Cursor(cursor).Match(match).Count(count).Build()).AsScanEntry()
 	c.checkNetOpError(err)
 
-	return results, cursor, err
+	return resp.Elements, resp.Cursor, err
 }
 
 func noErrNil(err error) error {

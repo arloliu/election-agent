@@ -4,7 +4,6 @@ package redlock
 
 import (
 	context "context"
-	time "time"
 
 	mock "github.com/stretchr/testify/mock"
 )
@@ -32,9 +31,9 @@ func (_m *MockConn) Close(ctx context.Context) error {
 	return r0
 }
 
-// Eval provides a mock function with given fields: ctx, script, keysAndArgs
-func (_m *MockConn) Eval(ctx context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
-	ret := _m.Called(ctx, script, keysAndArgs)
+// Eval provides a mock function with given fields: ctx, script, keys, args
+func (_m *MockConn) Eval(ctx context.Context, script *Script, keys []string, args []string) (interface{}, error) {
+	ret := _m.Called(ctx, script, keys, args)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Eval")
@@ -42,19 +41,19 @@ func (_m *MockConn) Eval(ctx context.Context, script *Script, keysAndArgs ...int
 
 	var r0 interface{}
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *Script, ...interface{}) (interface{}, error)); ok {
-		return rf(ctx, script, keysAndArgs...)
+	if rf, ok := ret.Get(0).(func(context.Context, *Script, []string, []string) (interface{}, error)); ok {
+		return rf(ctx, script, keys, args)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *Script, ...interface{}) interface{}); ok {
-		r0 = rf(ctx, script, keysAndArgs...)
+	if rf, ok := ret.Get(0).(func(context.Context, *Script, []string, []string) interface{}); ok {
+		r0 = rf(ctx, script, keys, args)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(interface{})
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *Script, ...interface{}) error); ok {
-		r1 = rf(ctx, script, keysAndArgs...)
+	if rf, ok := ret.Get(1).(func(context.Context, *Script, []string, []string) error); ok {
+		r1 = rf(ctx, script, keys, args)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -148,34 +147,6 @@ func (_m *MockConn) MSet(ctx context.Context, pairs ...interface{}) (bool, error
 	return r0, r1
 }
 
-// PTTL provides a mock function with given fields: ctx, name
-func (_m *MockConn) PTTL(ctx context.Context, name string) (time.Duration, error) {
-	ret := _m.Called(ctx, name)
-
-	if len(ret) == 0 {
-		panic("no return value specified for PTTL")
-	}
-
-	var r0 time.Duration
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (time.Duration, error)); ok {
-		return rf(ctx, name)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) time.Duration); ok {
-		r0 = rf(ctx, name)
-	} else {
-		r0 = ret.Get(0).(time.Duration)
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, name)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // Ping provides a mock function with given fields: ctx
 func (_m *MockConn) Ping(ctx context.Context) (bool, error) {
 	ret := _m.Called(ctx)
@@ -262,34 +233,6 @@ func (_m *MockConn) Set(ctx context.Context, name string, value string) (bool, e
 
 	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
 		r1 = rf(ctx, name, value)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// SetNX provides a mock function with given fields: ctx, name, value, expiry
-func (_m *MockConn) SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error) {
-	ret := _m.Called(ctx, name, value, expiry)
-
-	if len(ret) == 0 {
-		panic("no return value specified for SetNX")
-	}
-
-	var r0 bool
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) (bool, error)); ok {
-		return rf(ctx, name, value, expiry)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) bool); ok {
-		r0 = rf(ctx, name, value, expiry)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Duration) error); ok {
-		r1 = rf(ctx, name, value, expiry)
 	} else {
 		r1 = ret.Error(1)
 	}

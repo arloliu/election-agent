@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,19 +107,10 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return time.Until(item.active.Add(item.ttl)), nil
 		})
 
-	mockConn.On("Eval", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(func(_ context.Context, script *redlock.Script, keysAndArgs ...any) (any, error) {
+	mockConn.On("Eval", mock.Anything, mock.Anything, mock.AnythingOfType("[]string"), mock.AnythingOfType("[]string")).
+		Return(func(_ context.Context, script *redlock.Script, keys []string, args []string) (any, error) {
 			mockConn.mu.Lock()
 			defer mockConn.mu.Unlock()
-
-			keys := make([]string, script.KeyCount)
-			args := keysAndArgs
-			if script.KeyCount > 0 {
-				for i := 0; i < script.KeyCount; i++ {
-					keys[i], _ = keysAndArgs[i].(string)
-				}
-				args = keysAndArgs[script.KeyCount:]
-			}
 
 			if strings.Contains(script.Src, "-- delete") {
 				v, ok := mockConn.cache.Load(keys[0])
@@ -127,7 +119,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 				}
 
 				item, _ := v.(*cacheItem)
-				if item.val != args[0].(string) {
+				if item.val != args[0] {
 					return int64(0), nil
 				}
 
@@ -136,26 +128,28 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			} else if strings.Contains(script.Src, "-- acquire") || strings.Contains(script.Src, "-- touch") { // acquire or touch
 				if v, ok := mockConn.cache.Load(keys[0]); ok {
 					item, _ := v.(*cacheItem)
-					if item.val != args[0].(string) {
+					if item.val != args[0] {
 						return int64(0), nil
 					}
-
-					item.ttl = time.Duration(int64(args[1].(int)) * int64(time.Millisecond))
+					n, _ := strconv.ParseInt(args[1], 10, 64)
+					item.ttl = time.Duration(n * int64(time.Millisecond))
 					item.active = time.Now()
 					return int64(1), nil
 				} else {
+					n, _ := strconv.ParseInt(args[1], 10, 64)
 					item := &cacheItem{
-						val:    args[0].(string),
-						ttl:    time.Duration(int64(args[1].(int)) * int64(time.Millisecond)),
+						val:    args[0],
+						ttl:    time.Duration(n * int64(time.Millisecond)),
 						active: time.Now(),
 					}
 					mockConn.cache.Store(keys[0], item)
 					return int64(1), nil
 				}
 			} else if strings.Contains(script.Src, "-- handover") {
+				n, _ := strconv.ParseInt(args[1], 10, 64)
 				item := &cacheItem{
-					val:    args[0].(string),
-					ttl:    time.Duration(int64(args[1].(int)) * int64(time.Millisecond)),
+					val:    args[0],
+					ttl:    time.Duration(n * int64(time.Millisecond)),
 					active: time.Now(),
 				}
 				mockConn.cache.Store(keys[0], item)

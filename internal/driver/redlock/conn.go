@@ -5,7 +5,6 @@ import (
 	"crypto/sha1" //nolint:gosec
 	"encoding/hex"
 	"io"
-	"time"
 )
 
 type RedisPool interface {
@@ -15,9 +14,7 @@ type RedisPool interface {
 type Conn interface {
 	Get(ctx context.Context, name string) (string, error)
 	Set(ctx context.Context, name string, value string) (bool, error)
-	SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error)
-	Eval(ctx context.Context, script *Script, keysAndArgs ...any) (any, error)
-	PTTL(ctx context.Context, name string) (time.Duration, error)
+	Eval(ctx context.Context, script *Script, keys []string, args []string) (any, error)
 	Close(ctx context.Context) error
 	Ping(ctx context.Context) (bool, error)
 	MGet(ctx context.Context, keys ...string) ([]string, error)

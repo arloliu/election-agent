@@ -178,7 +178,7 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
 		defer cancel()
 		return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
-			return m.touch(ctx, conn, m.value, int(m.expiry/time.Millisecond))
+			return m.touch(ctx, conn, m.value, int64(m.expiry/time.Millisecond))
 		})
 	}()
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -204,7 +204,7 @@ func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error
 	conns, quorum := m.getConns(m.name)
 
 	n, err := actStatusOpAsync(conns, quorum, false, func(conn Conn) (bool, error) {
-		return m.handover(ctx, conn, holder, int(m.expiry/time.Millisecond))
+		return m.handover(ctx, conn, holder, int64(m.expiry/time.Millisecond))
 	})
 	if err != nil {
 		logging.Warnw("Mutex.HandoverContext got error", "name", m.name, "holder", holder, "err", err, "n", n, "quorum", quorum, "ttl", int(m.expiry/time.Millisecond))

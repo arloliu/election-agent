@@ -2,6 +2,7 @@ package redlock
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -17,7 +18,7 @@ var acquireScript = NewScript(1, `
 `)
 
 func (m *Mutex) acquire(ctx context.Context, conn Conn, value string) (bool, error) {
-	reply, err := conn.Eval(ctx, acquireScript, m.name, value, int(m.expiry/time.Millisecond))
+	reply, err := conn.Eval(ctx, acquireScript, []string{m.name}, []string{value, strconv.FormatInt(int64(m.expiry/time.Millisecond), 10)})
 	if err != nil {
 		return false, err
 	}
@@ -37,7 +38,7 @@ var deleteScript = NewScript(1, `
 `)
 
 func (m *Mutex) release(ctx context.Context, conn Conn, value string) (bool, error) {
-	status, err := conn.Eval(ctx, deleteScript, m.name, value)
+	status, err := conn.Eval(ctx, deleteScript, []string{m.name}, []string{value})
 	if err != nil {
 		return false, err
 	}
@@ -58,8 +59,8 @@ var touchScript = NewScript(1, `
 	end
 `)
 
-func (m *Mutex) touch(ctx context.Context, conn Conn, value string, expiry int) (bool, error) {
-	status, err := conn.Eval(ctx, touchScript, m.name, value, expiry)
+func (m *Mutex) touch(ctx context.Context, conn Conn, value string, expiry int64) (bool, error) {
+	status, err := conn.Eval(ctx, touchScript, []string{m.name}, []string{value, strconv.FormatInt(expiry, 10)})
 	if err != nil {
 		return false, err
 	}
@@ -71,8 +72,8 @@ var handoverScript = NewScript(1, `
 	return redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2])
 `)
 
-func (m *Mutex) handover(ctx context.Context, conn Conn, value string, expiry int) (bool, error) {
-	status, err := conn.Eval(ctx, handoverScript, m.name, value, expiry)
+func (m *Mutex) handover(ctx context.Context, conn Conn, value string, expiry int64) (bool, error) {
+	status, err := conn.Eval(ctx, handoverScript, []string{m.name}, []string{value, strconv.FormatInt(expiry, 10)})
 	if err != nil {
 		return false, err
 	}

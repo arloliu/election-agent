@@ -4,12 +4,11 @@ package redlock
 
 import (
 	"context"
+	"election-agent/internal/config"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
-
-	"election-agent/internal/config"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -61,28 +60,10 @@ func (c *goredisConn) Set(ctx context.Context, name string, value string) (bool,
 	return reply == "OK", err
 }
 
-func (c *goredisConn) SetNX(ctx context.Context, name string, value string, expiry time.Duration) (bool, error) {
-	return c.delegate.SetNX(ctx, name, value, expiry).Result()
-}
-
-func (c *goredisConn) PTTL(ctx context.Context, name string) (time.Duration, error) {
-	return c.delegate.PTTL(ctx, name).Result()
-}
-
-func (c *goredisConn) Eval(ctx context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
-	keys := make([]string, script.KeyCount)
-	args := keysAndArgs
-
-	if script.KeyCount > 0 {
-		for i := 0; i < script.KeyCount; i++ {
-			keys[i], _ = keysAndArgs[i].(string)
-		}
-		args = keysAndArgs[script.KeyCount:]
-	}
-
-	v, err := c.delegate.EvalSha(ctx, script.Hash, keys, args...).Result()
+func (c *goredisConn) Eval(ctx context.Context, script *Script, keys []string, args []string) (any, error) {
+	v, err := c.delegate.EvalSha(ctx, script.Hash, keys, args).Result()
 	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
-		v, err = c.delegate.Eval(ctx, script.Src, keys, args...).Result()
+		v, err = c.delegate.Eval(ctx, script.Src, keys, args).Result()
 	}
 	return v, noErrNil(err)
 }
