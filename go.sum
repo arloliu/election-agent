@@ -176,8 +176,6 @@ github.com/redis/go-redis/v9 v9.5.1 h1:H1X4D3yHPaYrkL5X06Wh6xNVM/pX0Ft4RV0vMGvLB
 github.com/redis/go-redis/v9 v9.5.1/go.mod h1:hdY0cQFCN4fnSYT6TkisLufl/4W5UIXyv0b/CLO2V2M=
 github.com/redis/rueidis v1.0.36 h1:LfyASusbTvxVQjX9yl4FsafJ8Bl8ZvCHTnqdH/McZQc=
 github.com/redis/rueidis v1.0.36/go.mod h1:bnbkk4+CkXZgDPEbUtSos/o55i4RhFYYesJ4DS2zmq0=
-github.com/redis/rueidis/rueidiscompat v1.0.36 h1:u4M3jfu1N5aS59S3NYbqddV1+MRqzEdoqPftiHuhFrU=
-github.com/redis/rueidis/rueidiscompat v1.0.36/go.mod h1:ERUkzG2Kb5e3ETpr16uVJu0ZxltfZqq5V58OSAH8F7Q=
 github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=
 github.com/rogpeppe/go-internal v1.11.0/go.mod h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
