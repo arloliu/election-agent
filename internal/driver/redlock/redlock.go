@@ -17,7 +17,7 @@ type RedLock struct {
 	shuffleConnPool [ShuffleConnPoolSize]ConnShards
 	connShards      ConnShards
 	quorum          int
-	mu              sync.Mutex
+	mu              sync.RWMutex
 }
 
 func New(connShards ...ConnGroup) *RedLock {
@@ -58,8 +58,8 @@ func (r *RedLock) GetQuorum() int {
 }
 
 func (r *RedLock) GetAllConnCount() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n := 0
 	for _, cg := range r.connShards {
 		n += len(cg)
@@ -69,8 +69,8 @@ func (r *RedLock) GetAllConnCount() int {
 }
 
 func (r *RedLock) getAllConns() []Conn {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
 	connPool := r.shuffleConnPool[idx]
@@ -83,8 +83,8 @@ func (r *RedLock) getAllConns() []Conn {
 }
 
 func (r *RedLock) getMasterConns() ([]Conn, int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
 	connShards := r.shuffleConnPool[idx]
@@ -93,8 +93,8 @@ func (r *RedLock) getMasterConns() ([]Conn, int) {
 }
 
 func (r *RedLock) getConns(key string) ([]Conn, int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	idx := rand.Intn(ShuffleConnPoolSize) //nolint:gosec
 	connShards := r.shuffleConnPool[idx]
@@ -106,8 +106,8 @@ func (r *RedLock) getConns(key string) ([]Conn, int) {
 }
 
 func (r *RedLock) GetConnShards() ConnShards {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	return r.connShards
 }
