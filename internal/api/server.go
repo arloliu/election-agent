@@ -110,8 +110,8 @@ func (srv *Server) startGRPC() error {
 	}
 
 	srv.grpcHealthService.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
-	srv.grpcHealthService.SetServingStatus("livez", healthgrpc.HealthCheckResponse_NOT_SERVING)
-	srv.grpcHealthService.SetServingStatus("readyz", healthgrpc.HealthCheckResponse_NOT_SERVING)
+	srv.grpcHealthService.SetServingStatus("liveness", healthgrpc.HealthCheckResponse_NOT_SERVING)
+	srv.grpcHealthService.SetServingStatus("readiness", healthgrpc.HealthCheckResponse_NOT_SERVING)
 
 	healthgrpc.RegisterHealthServer(srv.grpcServer, srv.grpcHealthService)
 
