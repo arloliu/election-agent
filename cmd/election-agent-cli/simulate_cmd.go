@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -68,10 +69,34 @@ var simulateCmd = &cobra.Command{
 	RunE:  simulateClients,
 }
 
+type LeaderExtendError struct {
+	err error
+}
+
+func (e *LeaderExtendError) Error() string {
+	return e.err.Error()
+}
+
+func newLeaderExtendError(format string, a ...any) *LeaderExtendError {
+	return &LeaderExtendError{err: fmt.Errorf(format, a...)}
+}
+
+type CandidateCampError struct {
+	err error
+}
+
+func (e *CandidateCampError) Error() string {
+	return e.err.Error()
+}
+
+func newCandidateCampError(format string, a ...any) *CandidateCampError {
+	return &CandidateCampError{err: fmt.Errorf(format, a...)}
+}
+
 type electionCandidate struct {
 	conn   *grpc.ClientConn
 	client eagrpc.ElectionClient
-	active bool
+	leader bool
 }
 
 type candidatePeers struct {
@@ -91,22 +116,34 @@ func (c *candidatePeers) members() []*electionCandidate {
 	return c.candaidates
 }
 
-func (c *candidatePeers) setActive(idx int) {
+func (c *candidatePeers) setLeader(idx int) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	var prevIdx int
 	for i, m := range c.candaidates {
-		if i == idx {
-			m.active = true
-		} else {
-			m.active = false
+		if m.leader {
+			prevIdx = i
+			break
 		}
 	}
+	for i, m := range c.candaidates {
+		if i == idx {
+			m.leader = true
+		} else {
+			m.leader = false
+		}
+	}
+
+	return prevIdx
 }
 
 type simulateClient struct {
-	ctx      context.Context
-	peers    []*candidatePeers
-	reqCount atomic.Int64
+	ctx                   context.Context
+	peers                 []*candidatePeers
+	reqCount              atomic.Int64
+	leaderChangeCount     atomic.Int32
+	leaderExtendErrCount  atomic.Int32
+	candidateCampErrCount atomic.Int32
 }
 
 func newSimulateClient(ctx context.Context) (*simulateClient, error) {
@@ -118,7 +155,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 	svcConfig := config.GrpcClientServiceConfig(ctxSimTimeout, 10, true)
 	for i := 0; i < numClients; i++ {
 		inst.peers[i] = &candidatePeers{candaidates: make([]*electionCandidate, numCandidates)}
-		activeIdx := rand.Intn(numCandidates) //nolint:gosec
+		leaderIdx := rand.Intn(numCandidates) //nolint:gosec
 		for j := 0; j < numCandidates; j++ {
 			conn, err := grpc.DialContext(ctx, Hostname,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -131,7 +168,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 			inst.peers[i].candaidates[j] = &electionCandidate{
 				conn:   conn,
 				client: eagrpc.NewElectionClient(conn),
-				active: j == activeIdx,
+				leader: j == leaderIdx,
 			}
 		}
 	}
@@ -145,7 +182,7 @@ func (s *simulateClient) shutdown() {
 	defer cancel()
 	for i, peer := range s.peers {
 		for j, c := range peer.members() {
-			if c.active {
+			if c.leader {
 				_, _ = c.client.Resign(ctx, resignReqN(i, j))
 			}
 			_ = c.conn.Close()
@@ -221,7 +258,7 @@ func (s *simulateClient) chooseLeader() error {
 		peers := peers
 		errs.Go(func() error {
 			for j, c := range peers.members() {
-				if !c.active {
+				if !c.leader {
 					continue
 				}
 
@@ -304,7 +341,7 @@ func (s *simulateClient) peerCampaign(ctx context.Context, i int, j int) error {
 func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCandidate, i int, j int) error { //nolint:cyclop
 	info := fmt.Sprintf("(peer: %d, candidate: %d)", i, j)
 
-	if c.active {
+	if c.leader {
 		ctx, cancel := context.WithTimeout(ctx, extendTimeout)
 		defer cancel()
 
@@ -316,26 +353,25 @@ func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCand
 		}
 
 		s.reqCount.Add(1)
-
 		switch simState {
 		case agent.ActiveState:
 			if err != nil {
-				return fmt.Errorf("Active candidate should extend elected term successed %s, got error: %w", info, err)
+				return newLeaderExtendError("Leader should extend elected term successed %s, got error: %w", info, err)
 			}
 			if !ret.Value {
-				return fmt.Errorf("Active candidate should extend elected term successed %s", info)
+				return newLeaderExtendError("Leader should extend elected term successed %s", info)
 			}
 		case agent.StandbyState:
 			if err != nil {
-				return fmt.Errorf("Active candidate should extend elected term fail but not got error %s, error: %w", info, err)
+				return newLeaderExtendError("Leader should extend elected term fail but not got error %s, error: %w", info, err)
 			} else if ret.Value {
-				return fmt.Errorf("Active candidate should extend elected term fail %s", info)
+				return newLeaderExtendError("Leader should extend elected term fail %s", info)
 			}
 		case agent.UnavailableState:
 			if err == nil {
-				return fmt.Errorf("Active candidate should extend elected term fail and got error %s", info)
+				return newLeaderExtendError("Leader should extend elected term fail and got error %s", info)
 			} else if status.Code(err) != codes.FailedPrecondition {
-				return fmt.Errorf("Active candidate should extend elected term fail and got unavailable status code, actual status code: %d %s", status.Code(err), info)
+				return newLeaderExtendError("Leader should extend elected term fail and got unavailable status code, actual status code: %d %s", status.Code(err), info)
 			}
 		}
 	} else {
@@ -354,24 +390,27 @@ func (s *simulateClient) peerCampaignAction(ctx context.Context, c *electionCand
 		switch simState {
 		case agent.ActiveState:
 			if ret != nil && ret.Elected {
-				s.peers[i].setActive(j)
+				prevIdx := s.peers[i].setLeader(j)
+				if prevIdx != j {
+					s.leaderChangeCount.Add(1)
+				}
 				if err != nil {
-					return fmt.Errorf("Inactive candidate should campaign term fail, switch to active %s, got error: %w", info, err)
+					return newCandidateCampError("Candidate should campaign term fail, switch to active %s, got error: %w", info, err)
 				} else {
-					return fmt.Errorf("Inactive candidate should campaign term fail, switch to active %s", info)
+					return newCandidateCampError("Candidate should campaign term fail, switch to active %s", info)
 				}
 			}
 		case agent.StandbyState:
 			if err != nil {
-				return fmt.Errorf("Inactive candidate should campaign fail but not got error %s, error: %w", info, err)
+				return newCandidateCampError("Candidate should campaign fail but not got error %s, error: %w", info, err)
 			} else if ret.Elected {
-				return fmt.Errorf("Inactive candidate should campaign fail %s", info)
+				return newCandidateCampError("Candidate should campaign fail %s", info)
 			}
 		case agent.UnavailableState:
 			if err == nil {
-				return fmt.Errorf("Inactive candidate should campaign term fail and got error %s", info)
+				return newCandidateCampError("Candidate should campaign term fail and got error %s", info)
 			} else if status.Code(err) != codes.FailedPrecondition {
-				return fmt.Errorf("Inactive candidate should extend elected term fail and got unavailable status code, actual status code: %d %s", status.Code(err), info)
+				return newCandidateCampError("Candidate should extend elected term fail and got unavailable status code, actual status code: %d %s", status.Code(err), info)
 			}
 		}
 	}
@@ -387,7 +426,14 @@ func (s *simulateClient) simulateWorker(ctx context.Context, i int, j int, resul
 		err := s.peerCampaign(ctx, i, j)
 		if err != nil {
 			if forever {
-				fmt.Printf("[%s] Got error: %s\n", now(), err)
+				err1 := &LeaderExtendError{}
+				err2 := &CandidateCampError{}
+				if errors.As(err, &err1) {
+					s.leaderExtendErrCount.Add(1)
+				}
+				if errors.As(err, &err2) {
+					s.candidateCampErrCount.Add(1)
+				}
 			} else {
 				resultChan <- err
 				return
@@ -456,18 +502,35 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if forever {
+		foreverTicket := time.NewTicker(time.Duration(interval) * time.Millisecond)
+		defer foreverTicket.Stop()
+		go func() {
+			for range foreverTicket.C {
+				count := clients.leaderChangeCount.Swap(0)
+				if count > 0 {
+					fmt.Printf("[%s] The number of leaders swicthed: %d\n", now(), count)
+				}
+
+				errCount1 := clients.leaderExtendErrCount.Swap(0)
+				errCount2 := clients.candidateCampErrCount.Swap(0)
+				if errCount1 > 0 || errCount2 > 0 {
+					fmt.Printf("[%s] Leader extend error count: %d, Candidate campaign error count: %d\n", now(), errCount1, errCount2)
+				}
+			}
+		}()
+
+	}
 	if displayRPS {
 		displayTicker := time.NewTicker(2 * time.Second)
 		defer displayTicker.Stop()
 		cycleStart := time.Now()
 		go func() {
 			for range displayTicker.C {
-				if displayRPS {
-					count := clients.reqCount.Swap(0)
-					rps := float64(count) / time.Since(cycleStart).Seconds()
-					cycleStart = time.Now()
-					fmt.Printf("[%s] Election RPS: %.1f\n", now(), rps)
-				}
+				count := clients.reqCount.Swap(0)
+				rps := float64(count) / time.Since(cycleStart).Seconds()
+				cycleStart = time.Now()
+				fmt.Printf("[%s] Election RPS: %.1f\n", now(), rps)
 			}
 		}()
 	}
