@@ -17,6 +17,8 @@ import (
 	"github.com/redis/rueidis"
 )
 
+const createClientThreshold = 5 * time.Second
+
 // rueidisConn implements `Conn` interface
 type rueidisConn struct {
 	client      rueidis.Client
@@ -45,7 +47,6 @@ func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, err
 	conns := make([]Conn, len(redisOpts))
 	for i, opts := range redisOpts {
 		opts.Dialer.Timeout = 1 * time.Second
-		opts.ShuffleInit = true
 		client, err := rueidis.NewClient(*opts)
 		if err != nil {
 			logging.Warnw("Failed to create rueidis client", "InitAddress", opts.InitAddress, "error", err)
@@ -57,30 +58,40 @@ func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, err
 	return ConnShards{conns}, nil
 }
 
-func (c *rueidisConn) getClient() rueidis.Client {
-	c.mu.RLock()
-	if c.client != nil {
-		if isNetOpError(c.lastErr) && time.Since(c.lastErrTime) < time.Second {
-			c.mu.RUnlock()
-			return nil
-		}
-		c.mu.RUnlock()
-		return c.client
-	}
-	c.mu.RUnlock()
-
+func (c *rueidisConn) createClient() rueidis.Client {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	client, err := rueidis.NewClient(*c.opts)
 	if err != nil {
+		logging.Warnw("Failed to establish rueidis client", "addr", c.opts.InitAddress[0], "error", err)
 		c.lastErr = err
+		c.lastErrTime = time.Now()
 		return nil
 	}
 
+	logging.Debugw("Establish rueidis client", "addr", c.opts.InitAddress[0])
 	c.client = client
 	c.lastErr = nil
+	c.lastErrTime = time.Time{}
 	return c.client
+}
+
+func (c *rueidisConn) getClient() rueidis.Client {
+	c.mu.RLock()
+	if c.client != nil {
+		if c.lastErr == nil {
+			c.mu.RUnlock()
+			return c.client
+		}
+		if time.Since(c.lastErrTime) < createClientThreshold {
+			c.mu.RUnlock()
+			return nil
+		}
+	}
+	c.mu.RUnlock()
+
+	return c.createClient()
 }
 
 func (c *rueidisConn) checkNetOpError(err error) {
@@ -90,8 +101,10 @@ func (c *rueidisConn) checkNetOpError(err error) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.lastErr = err
-	c.lastErrTime = time.Now()
+	if c.lastErrTime.IsZero() {
+		c.lastErr = err
+		c.lastErrTime = time.Now()
+	}
 }
 
 func (c *rueidisConn) Get(ctx context.Context, name string) (string, error) {
