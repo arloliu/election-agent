@@ -41,7 +41,10 @@ var (
 	displayRPS    bool
 )
 
-var finished atomic.Bool
+var (
+	finished      atomic.Bool
+	finishedCount atomic.Int32
+)
 
 const ctxSimTimeout = 6 * time.Second
 
@@ -177,7 +180,18 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 }
 
 func (s *simulateClient) shutdown() {
-	fmt.Printf("[%s] Shutdown %d peers\n", now(), len(s.peers)*numCandidates)
+	totalPeerCount := len(s.peers) * numCandidates
+
+	fmt.Printf("[%s] Wait %d peers finished for 5 seconds\n", now(), totalPeerCount)
+	start := time.Now()
+	for {
+		if int(finishedCount.Load()) >= totalPeerCount || time.Since(start) >= 5*time.Second {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	fmt.Printf("[%s] Shutdown %d peers\n", now(), totalPeerCount)
 	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 	defer cancel()
 	for i, peer := range s.peers {
@@ -442,6 +456,9 @@ func (s *simulateClient) simulateWorker(ctx context.Context, i int, j int, resul
 
 		select {
 		case <-ctx.Done():
+			if finished.Load() {
+				finishedCount.Add(1)
+			}
 			resultChan <- nil
 			return
 		case <-ticker.C:
@@ -454,7 +471,7 @@ func now() string {
 	return time.Now().Format(time.RFC3339)
 }
 
-func simulateClients(cmd *cobra.Command, args []string) error {
+func simulateClients(cmd *cobra.Command, args []string) error { //nolint:cyclop
 	var duration time.Duration
 	if leaderResign {
 		duration = 30 * time.Second
@@ -507,6 +524,10 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 		defer foreverTicket.Stop()
 		go func() {
 			for range foreverTicket.C {
+				if finished.Load() {
+					break
+				}
+
 				count := clients.leaderChangeCount.Swap(0)
 				if count > 0 {
 					fmt.Printf("[%s] The number of leaders swicthed: %d\n", now(), count)
@@ -519,14 +540,18 @@ func simulateClients(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}()
-
 	}
+
 	if displayRPS {
 		displayTicker := time.NewTicker(2 * time.Second)
 		defer displayTicker.Stop()
 		cycleStart := time.Now()
 		go func() {
 			for range displayTicker.C {
+				if finished.Load() {
+					break
+				}
+
 				count := clients.reqCount.Swap(0)
 				rps := float64(count) / time.Since(cycleStart).Seconds()
 				cycleStart = time.Now()
