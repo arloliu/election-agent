@@ -335,7 +335,7 @@ func agentStatusIs(ctx context.Context, cfg *envconf.Config, name string, state 
 			}
 		}
 
-		times := rand.Intn(7)
+		times := rand.Intn(4) + 3
 		if matched && agentStatusIsWithTimes(ctx, cfg, agentHost, state, mode, times) {
 			log.Printf("# All Matched(count: %d), agent %s state: %s, mode: %s\n", len(status), agentHost, state, mode)
 			return nil
