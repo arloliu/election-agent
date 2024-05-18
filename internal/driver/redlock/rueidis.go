@@ -1,5 +1,3 @@
-//go:build rueidis
-
 package redlock
 
 import (
@@ -17,7 +15,7 @@ import (
 	"github.com/redis/rueidis"
 )
 
-const createClientThreshold = 5 * time.Second
+const createClientThreshold = 1 * time.Second
 
 // rueidisConn implements `Conn` interface
 type rueidisConn struct {
@@ -30,8 +28,8 @@ type rueidisConn struct {
 
 var _ Conn = (*rueidisConn)(nil)
 
-func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, error) {
-	redisOpts, err := parseRedisURLs(cfg)
+func CreateRueidisConnections(ctx context.Context, cfg *config.Config) (ConnShards, error) {
+	redisOpts, err := parseRueidisURLs(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -48,11 +46,14 @@ func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, err
 	for i, opts := range redisOpts {
 		opts.Dialer.Timeout = 1 * time.Second
 		client, err := rueidis.NewClient(*opts)
+		conn := &rueidisConn{client: client, opts: opts, lastErr: err}
 		if err != nil {
 			logging.Warnw("Failed to create rueidis client", "InitAddress", opts.InitAddress, "error", err)
+			conn.lastErrTime = time.Now()
+		} else {
+			logging.Info("Rueidis client created", "addr", opts.InitAddress[0])
 		}
-
-		conns[i] = &rueidisConn{client: client, opts: opts, lastErr: err}
+		conns[i] = conn
 	}
 
 	return ConnShards{conns}, nil
@@ -70,7 +71,7 @@ func (c *rueidisConn) createClient() rueidis.Client {
 		return nil
 	}
 
-	logging.Debugw("Establish rueidis client", "addr", c.opts.InitAddress[0])
+	logging.Info("Rueidis client established", "addr", c.opts.InitAddress[0])
 	c.client = client
 	c.lastErr = nil
 	c.lastErrTime = time.Time{}
@@ -116,7 +117,7 @@ func (c *rueidisConn) Get(ctx context.Context, name string) (string, error) {
 	value, err := client.Do(ctx, client.B().Get().Key(name).Build()).ToString()
 	c.checkNetOpError(err)
 
-	return value, noErrNil(err)
+	return value, noRueidisErrNil(err)
 }
 
 func (c *rueidisConn) Set(ctx context.Context, name string, value string) (bool, error) {
@@ -142,7 +143,7 @@ func (c *rueidisConn) Eval(ctx context.Context, script *Script, keys []string, a
 	}
 	c.checkNetOpError(err)
 
-	return v, noErrNil(err)
+	return v, noRueidisErrNil(err)
 }
 
 func (c *rueidisConn) Close(ctx context.Context) error {
@@ -179,7 +180,7 @@ func (c *rueidisConn) MGet(ctx context.Context, keys ...string) ([]string, error
 		strs[i], _ = v.ToString()
 	}
 
-	return strs, noErrNil(err)
+	return strs, noRueidisErrNil(err)
 }
 
 func (c *rueidisConn) MSet(ctx context.Context, pairs ...any) (bool, error) {
@@ -211,14 +212,14 @@ func (c *rueidisConn) Scan(ctx context.Context, cursor uint64, match string, cou
 	return resp.Elements, resp.Cursor, err
 }
 
-func noErrNil(err error) error {
+func noRueidisErrNil(err error) error {
 	if rueidis.IsRedisNil(err) {
 		return nil
 	}
 	return err
 }
 
-func parseRedisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
+func parseRueidisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
 	redisURLs := cfg.Redis.URLs
 	mode := cfg.Redis.Mode
 	redisOpts := make([]*rueidis.ClientOption, 0)
@@ -246,7 +247,7 @@ func parseRedisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
 			return nil, errors.New("When the redis mode is sharding, the number of redis urls must be an odd number")
 		}
 		for _, redisURL := range redisURLs {
-			opts, err := parseShardingURL(redisURL)
+			opts, err := parseRueidisShardingURL(redisURL)
 			if err != nil {
 				return nil, err
 			}
@@ -257,7 +258,7 @@ func parseRedisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
 	return redisOpts, nil
 }
 
-func parseShardingURL(redisURL string) ([]*rueidis.ClientOption, error) {
+func parseRueidisShardingURL(redisURL string) ([]*rueidis.ClientOption, error) {
 	opt, err := rueidis.ParseURL(redisURL)
 	if err != nil {
 		return nil, err
@@ -277,8 +278,5 @@ func isNetOpError(err error) bool {
 		return false
 	}
 	opErr := &net.OpError{}
-	if errors.As(err, &opErr) {
-		return true
-	}
-	return false
+	return errors.As(err, &opErr)
 }

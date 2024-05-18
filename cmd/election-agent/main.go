@@ -36,7 +36,7 @@ func main() {
 	cfg := config.GetDefault()
 
 	switch cfg.Driver {
-	case "redis":
+	case "goredis", "rueidis":
 		kvDriver, err = driver.NewRedisKVDriver(ctx, cfg)
 	default:
 		logging.Fatalw("Unsupported driver", "driver", cfg.Driver)

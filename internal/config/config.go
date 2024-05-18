@@ -50,9 +50,9 @@ type Config struct {
 
 	Zone ZoneConfig `yaml:"zone"` // K8S multi-zone related settings.
 
-	// Driver indicates the lease driver, currently only supports `redis` driver.
-	// Defaults to `redis`.
-	Driver string `default:"redis" yaml:"driver"`
+	// Driver indicates the lease driver, currently only supports `goredis` and `rueidis` driver.
+	// Defaults to `rueidis`.
+	Driver string `default:"rueidis" yaml:"driver"`
 	// Redis related settings, it only take effects when the driver is `redis`.
 	// Redis related settings, it only take effects when the driver is `redis`.
 	Redis RedisConfig `yaml:"redis"`
@@ -214,7 +214,7 @@ func Init() error {
 	}
 
 	// TODO: implement stricter sanity check
-	if cfg.Driver == "redis" && !slices.Contains([]string{"single", "cluster", "sharding"}, cfg.Redis.Mode) {
+	if (cfg.Driver == "goredis" || cfg.Driver == "rueidis") && !slices.Contains([]string{"single", "cluster", "sharding"}, cfg.Redis.Mode) {
 		return fmt.Errorf("Unsupported redis mode:%s", cfg.Redis.Mode)
 	}
 	if !cfg.HTTP.Enable && cfg.Metric.Enable {

@@ -8,10 +8,18 @@ import (
 	"sync"
 	time "time"
 
+	"election-agent/internal/config"
+
 	"github.com/hashicorp/go-multierror"
 )
 
 const ShuffleConnPoolSize = 10
+
+var CreateConnections (func(ctx context.Context, cfg *config.Config) (ConnShards, error))
+
+func RegisterCreateConnectionsFunc(fn func(ctx context.Context, cfg *config.Config) (ConnShards, error)) {
+	CreateConnections = fn
+}
 
 type RedLock struct {
 	shuffleConnPool [ShuffleConnPoolSize]ConnShards

@@ -39,6 +39,13 @@ type RedisKVDriver struct {
 var _ KVDriver = (*RedisKVDriver)(nil)
 
 func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, error) {
+	switch cfg.Driver {
+	case "goredis":
+		redlock.RegisterCreateConnectionsFunc(redlock.CreateGoredisConnections)
+	case "rueidis":
+		redlock.RegisterCreateConnectionsFunc(redlock.CreateRueidisConnections)
+	}
+
 	connShards, err := redlock.CreateConnections(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -79,7 +86,8 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 		_ = inst.SetAgentStatus(&agent.Status{State: agent.ActiveState, Mode: agent.NormalMode})
 	}
 
-	logging.Infow("Redis key-value driver",
+	logging.Infow("Key-value driver",
+		"driver", cfg.Driver,
 		"mode", cfg.Redis.Mode,
 		"primary", cfg.Redis.Primary,
 		"operation_timeout", cfg.Redis.OpearationTimeout,

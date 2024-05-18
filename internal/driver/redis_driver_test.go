@@ -133,32 +133,35 @@ func TestRedisKVDriver_server_nonexist(t *testing.T) {
 	require := require.New(t)
 
 	ctx := context.TODO()
-	cfg := config.Config{
-		Redis: config.RedisConfig{
-			Mode: "single",
-			URLs: []string{"redis://noneexist:7000", "redis://noneexist:7001", "redis://noneexist:7002"},
-		},
+	for _, driver := range []string{"goredis", "rueidis"} {
+		cfg := config.Config{
+			Driver: driver,
+			Redis: config.RedisConfig{
+				Mode: "single",
+				URLs: []string{"redis://noneexist:7000", "redis://noneexist:7001", "redis://noneexist:7002"},
+			},
+		}
+
+		driver, err := NewRedisKVDriver(ctx, &cfg)
+		require.NoError(err)
+		require.NotNil(driver)
+
+		for _, connShards := range driver.connShards {
+			require.LessOrEqual(1, len(connShards))
+			conn := connShards[0]
+			result, err := conn.Ping(ctx)
+			require.Error(err)
+			require.False(result)
+
+			ok, err := conn.Set(ctx, "test", "value")
+			require.False(ok)
+			require.Error(err)
+		}
+
+		mutex := driver.NewMutex("test", "", "replica1", 3*time.Second)
+		require.NotNil(mutex)
+
+		err = mutex.TryLockContext(ctx)
+		require.ErrorContains(err, "noneexist")
 	}
-
-	driver, err := NewRedisKVDriver(ctx, &cfg)
-	require.NoError(err)
-	require.NotNil(driver)
-
-	for _, connShards := range driver.connShards {
-		require.LessOrEqual(1, len(connShards))
-		conn := connShards[0]
-		result, err := conn.Ping(ctx)
-		require.Error(err)
-		require.False(result)
-
-		ok, err := conn.Set(ctx, "test", "value")
-		require.False(ok)
-		require.Error(err)
-	}
-
-	mutex := driver.NewMutex("test", "", "replica1", 3*time.Second)
-	require.NotNil(mutex)
-
-	err = mutex.TryLockContext(ctx)
-	require.ErrorContains(err, "noneexist")
 }

@@ -1,14 +1,13 @@
-//go:build goredis || !rueidis
-
 package redlock
 
 import (
 	"context"
-	"election-agent/internal/config"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"election-agent/internal/config"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -20,7 +19,7 @@ type goredisConn struct {
 
 var _ Conn = (*goredisConn)(nil)
 
-func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, error) {
+func CreateGoredisConnections(ctx context.Context, cfg *config.Config) (ConnShards, error) {
 	redisOpts, err := parseRedisURLs(cfg)
 	if err != nil {
 		return nil, err
@@ -52,7 +51,7 @@ func CreateConnections(ctx context.Context, cfg *config.Config) (ConnShards, err
 
 func (c *goredisConn) Get(ctx context.Context, name string) (string, error) {
 	value, err := c.delegate.Get(ctx, name).Result()
-	return value, noErrNil(err)
+	return value, noGoredisErrNil(err)
 }
 
 func (c *goredisConn) Set(ctx context.Context, name string, value string) (bool, error) {
@@ -65,7 +64,7 @@ func (c *goredisConn) Eval(ctx context.Context, script *Script, keys []string, a
 	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
 		v, err = c.delegate.Eval(ctx, script.Src, keys, args).Result()
 	}
-	return v, noErrNil(err)
+	return v, noGoredisErrNil(err)
 }
 
 func (c *goredisConn) Close(_ context.Context) error {
@@ -79,7 +78,7 @@ func (c *goredisConn) Ping(ctx context.Context) (bool, error) {
 
 func (c *goredisConn) MGet(ctx context.Context, keys ...string) ([]string, error) {
 	vals, err := c.delegate.MGet(ctx, keys...).Result()
-	err = noErrNil(err)
+	err = noGoredisErrNil(err)
 
 	strs := make([]string, len(vals))
 	for i, v := range vals {
@@ -90,7 +89,7 @@ func (c *goredisConn) MGet(ctx context.Context, keys ...string) ([]string, error
 		}
 	}
 
-	return strs, noErrNil(err)
+	return strs, noGoredisErrNil(err)
 }
 
 func (c *goredisConn) MSet(ctx context.Context, pairs ...any) (bool, error) {
@@ -102,7 +101,7 @@ func (c *goredisConn) Scan(ctx context.Context, cursor uint64, match string, cou
 	return c.delegate.Scan(ctx, cursor, match, count).Result()
 }
 
-func noErrNil(err error) error {
+func noGoredisErrNil(err error) error {
 	if !errors.Is(err, redis.Nil) {
 		return err
 	}
@@ -158,7 +157,7 @@ func parseRedisURLs(cfg *config.Config) ([][]*redis.UniversalOptions, error) {
 
 		uoptssCount := 0
 		for _, redisURL := range redisURLs {
-			uoptss, err := parseShardingURL(redisURL)
+			uoptss, err := parseGoredisShardingURL(redisURL)
 			if err != nil {
 				return nil, err
 			}
@@ -178,7 +177,7 @@ func parseRedisURLs(cfg *config.Config) ([][]*redis.UniversalOptions, error) {
 	return redisOpts, nil
 }
 
-func parseShardingURL(redisURL string) ([]*redis.UniversalOptions, error) {
+func parseGoredisShardingURL(redisURL string) ([]*redis.UniversalOptions, error) {
 	copts, err := redis.ParseClusterURL(redisURL)
 	if err != nil {
 		return nil, err
