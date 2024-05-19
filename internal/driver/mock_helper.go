@@ -203,5 +203,7 @@ func NewMockRedlockConn() *mockMutexConn { //nolint:cyclop
 			return true, nil
 		})
 
+	mockConn.On("NotAcceptLock").Return(false)
+
 	return mockConn
 }

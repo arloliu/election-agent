@@ -20,6 +20,7 @@ type Conn interface {
 	MGet(ctx context.Context, keys ...string) ([]string, error)
 	MSet(ctx context.Context, pairs ...any) (bool, error)
 	Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error)
+	NotAcceptLock() bool
 }
 
 type (

@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"election-agent/internal/config"
@@ -15,15 +16,15 @@ import (
 	"github.com/redis/rueidis"
 )
 
-const createClientThreshold = 1 * time.Second
-
 // rueidisConn implements `Conn` interface
 type rueidisConn struct {
-	client      rueidis.Client
-	opts        *rueidis.ClientOption
-	lastErr     error
-	lastErrTime time.Time
-	mu          sync.RWMutex
+	client       rueidis.Client
+	opts         *rueidis.ClientOption
+	lastErr      error
+	recreateTime time.Time
+	mu           sync.RWMutex
+
+	clientRoutine atomic.Bool
 }
 
 var _ Conn = (*rueidisConn)(nil)
@@ -42,57 +43,69 @@ func CreateRueidisConnections(ctx context.Context, cfg *config.Config) (ConnShar
 		return nil, fmt.Errorf("The value of redis.primary=%d is out of range", cfg.Redis.Primary)
 	}
 
-	conns := make([]Conn, len(redisOpts))
-	for i, opts := range redisOpts {
-		opts.Dialer.Timeout = 1 * time.Second
-		client, err := rueidis.NewClient(*opts)
-		conn := &rueidisConn{client: client, opts: opts, lastErr: err}
-		if err != nil {
-			logging.Warnw("Failed to create rueidis client", "InitAddress", opts.InitAddress, "error", err)
-			conn.lastErrTime = time.Now()
-		} else {
-			logging.Info("Rueidis client created", "addr", opts.InitAddress[0])
+	shardSize := len(redisOpts[0])
+	connShards := make(ConnShards, shardSize)
+	for _, optss := range redisOpts {
+		for idx, opts := range optss {
+			opts.Dialer.Timeout = 1 * time.Second
+			client, err := rueidis.NewClient(*opts)
+			conn := &rueidisConn{client: client, opts: opts, lastErr: err}
+			if err != nil {
+				logging.Warnw("Failed to create rueidis client", "InitAddress", opts.InitAddress, "error", err)
+			} else {
+				logging.Infow("Rueidis client created", "addr", opts.InitAddress[0])
+			}
+			connShards[idx] = append(connShards[idx], conn)
 		}
-		conns[i] = conn
 	}
 
-	return ConnShards{conns}, nil
+	return connShards, nil
 }
 
-func (c *rueidisConn) createClient() rueidis.Client {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	client, err := rueidis.NewClient(*c.opts)
-	if err != nil {
-		logging.Warnw("Failed to establish rueidis client", "addr", c.opts.InitAddress[0], "error", err)
-		c.lastErr = err
-		c.lastErrTime = time.Now()
-		return nil
+func (c *rueidisConn) createClient() {
+	// Ensure there is only one goroutine through CAS atomic lock
+	if !c.clientRoutine.CompareAndSwap(false, true) {
+		return
 	}
 
-	logging.Info("Rueidis client established", "addr", c.opts.InitAddress[0])
-	c.client = client
-	c.lastErr = nil
-	c.lastErrTime = time.Time{}
-	return c.client
+	go func() {
+		defer c.clientRoutine.Store(false)
+
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			client, err := rueidis.NewClient(*c.opts)
+			if err != nil {
+				logging.Warnw("Failed to establish rueidis client", "addr", c.opts.InitAddress[0], "error", err)
+				c.mu.Lock()
+				c.lastErr = err
+				c.mu.Unlock()
+				continue
+			}
+
+			logging.Infow("Rueidis client established", "addr", c.opts.InitAddress[0])
+
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			c.client = client
+			c.lastErr = nil
+			c.recreateTime = time.Now()
+			return
+		}
+	}()
 }
 
 func (c *rueidisConn) getClient() rueidis.Client {
 	c.mu.RLock()
-	if c.client != nil {
-		if c.lastErr == nil {
-			c.mu.RUnlock()
-			return c.client
-		}
-		if time.Since(c.lastErrTime) < createClientThreshold {
-			c.mu.RUnlock()
-			return nil
-		}
+	client := c.client
+	if client != nil && c.lastErr == nil {
+		c.mu.RUnlock()
+		return client
 	}
 	c.mu.RUnlock()
 
-	return c.createClient()
+	c.createClient()
+	return nil
 }
 
 func (c *rueidisConn) checkNetOpError(err error) {
@@ -101,11 +114,8 @@ func (c *rueidisConn) checkNetOpError(err error) {
 	}
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.lastErrTime.IsZero() {
-		c.lastErr = err
-		c.lastErrTime = time.Now()
-	}
+	c.lastErr = err
+	c.mu.Unlock()
 }
 
 func (c *rueidisConn) Get(ctx context.Context, name string) (string, error) {
@@ -212,6 +222,13 @@ func (c *rueidisConn) Scan(ctx context.Context, cursor uint64, match string, cou
 	return resp.Elements, resp.Cursor, err
 }
 
+func (c *rueidisConn) NotAcceptLock() bool {
+	c.mu.RLock()
+	elasped := time.Since(c.recreateTime)
+	c.mu.RUnlock()
+	return elasped < 3*time.Second
+}
+
 func noRueidisErrNil(err error) error {
 	if rueidis.IsRedisNil(err) {
 		return nil
@@ -219,10 +236,10 @@ func noRueidisErrNil(err error) error {
 	return err
 }
 
-func parseRueidisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
+func parseRueidisURLs(cfg *config.Config) ([][]*rueidis.ClientOption, error) {
 	redisURLs := cfg.Redis.URLs
 	mode := cfg.Redis.Mode
-	redisOpts := make([]*rueidis.ClientOption, 0)
+	redisOpts := make([][]*rueidis.ClientOption, 0)
 
 	if mode == "single" || mode == "cluster" {
 		if len(redisURLs) < 3 {
@@ -237,7 +254,7 @@ func parseRueidisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
 			if err != nil {
 				return nil, err
 			}
-			redisOpts = append(redisOpts, &opt)
+			redisOpts = append(redisOpts, []*rueidis.ClientOption{&opt})
 		}
 	} else if mode == "sharding" {
 		if len(redisURLs) < 3 {
@@ -251,7 +268,7 @@ func parseRueidisURLs(cfg *config.Config) ([]*rueidis.ClientOption, error) {
 			if err != nil {
 				return nil, err
 			}
-			redisOpts = append(redisOpts, opts...)
+			redisOpts = append(redisOpts, opts)
 		}
 	}
 

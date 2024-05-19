@@ -101,6 +101,10 @@ func (c *goredisConn) Scan(ctx context.Context, cursor uint64, match string, cou
 	return c.delegate.Scan(ctx, cursor, match, count).Result()
 }
 
+func (c *goredisConn) NotAcceptLock() bool {
+	return false
+}
+
 func noGoredisErrNil(err error) error {
 	if !errors.Is(err, redis.Nil) {
 		return err

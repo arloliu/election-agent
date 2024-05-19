@@ -147,6 +147,24 @@ func (_m *MockConn) MSet(ctx context.Context, pairs ...interface{}) (bool, error
 	return r0, r1
 }
 
+// NotAcceptLock provides a mock function with given fields:
+func (_m *MockConn) NotAcceptLock() bool {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for NotAcceptLock")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
 // Ping provides a mock function with given fields: ctx
 func (_m *MockConn) Ping(ctx context.Context) (bool, error) {
 	ret := _m.Called(ctx)

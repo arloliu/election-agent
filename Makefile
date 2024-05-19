@@ -17,8 +17,6 @@ GOARCH      ?= $(shell go env GOARCH)
 GOPATH      ?= $(shell go env GOPATH)
 CGO_ENABLED ?= 0
 LDFLAGS ?= -ldflags="-s -w"
-# BUILD_TAGS ?= goredis
-BUILD_TAGS ?= rueidis
 V ?= 0
 ifeq ($(V), 1)
 override VERBOSE_TAG := -v
@@ -46,7 +44,7 @@ SUMMARY_COVER_PROFILE      := $(COVER_ROOT)/summary.out
 
 # Programs
 run:
-	go run -tags $(BUILD_TAGS)  ./cmd/election-agent
+	go run  ./cmd/election-agent
 
 run-zone-coordinator:
 	go run ./cmd/zone-coordinator
@@ -54,7 +52,7 @@ run-zone-coordinator:
 # Build
 build-election-agent: $(ALL_SRC)
 	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"
-	CGO_ENABLED=$(CGO_ENABLED) go build -tags $(BUILD_TAGS) $(LDFLAGS) -o election-agent ./cmd/election-agent
+	CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -o election-agent ./cmd/election-agent
 
 build-election-agent-cli: $(ALL_SRC)
 	@printf "Build election-agent with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)...\n"

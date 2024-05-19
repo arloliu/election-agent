@@ -69,6 +69,9 @@ func (m *Mutex) TryLockContext(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
 		defer cancel()
 		return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
+			if conn.NotAcceptLock() {
+				return false, nil
+			}
 			return m.acquire(ctx, conn, value)
 		})
 	}()
@@ -134,6 +137,9 @@ func (m *Mutex) lockContext(ctx context.Context, tries int) error {
 			ctx, cancel := context.WithTimeout(ctx, m.opTimeout)
 			defer cancel()
 			return actStatusOpAsync(conns, quorum, true, func(conn Conn) (bool, error) {
+				if conn.NotAcceptLock() {
+					return false, nil
+				}
 				return m.acquire(ctx, conn, value)
 			})
 		}()
