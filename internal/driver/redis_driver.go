@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -28,7 +27,6 @@ type RedisKVDriver struct {
 	rlock      *redlock.RedLock
 	mu         sync.Mutex
 	hasher     maphash.Hasher[string]
-	hostname   string
 
 	stateKey      string
 	modeKey       string
@@ -65,7 +63,6 @@ func NewRedisKVDriver(ctx context.Context, cfg *config.Config) (*RedisKVDriver, 
 		mode:          agent.NormalMode,
 		rlock:         redlock.New(connShards...),
 		hasher:        maphash.NewHasher[string](),
-		hostname:      os.Getenv("HOSTNAME"),
 		stateKey:      cfg.AgentInfoKey(agent.StateKey),
 		modeKey:       cfg.AgentInfoKey(agent.ModeKey),
 		activeZoneKey: cfg.AgentInfoKey(agent.ActiveZoneKey),
@@ -256,17 +253,21 @@ func (rd *RedisKVDriver) GetAgentState() (string, error) {
 		return state, fmt.Errorf("The retrieved agent state '%s' is invalid", state)
 	}
 
-	logging.Debugw("driver: GetAgentState", "state", state, "key", rd.stateKey, "hostname", rd.hostname)
+	logging.Debugw("driver: GetAgentState", "state", state, "key", rd.stateKey, "hostname", agent.Hostname())
 	return state, nil
 }
 
 func (rd *RedisKVDriver) SetAgentMode(mode string) error {
-	logging.Debugw("driver: SetAgentMode", "mode", mode, "hostname", rd.hostname)
+	logging.Debugw("driver: SetAgentMode", "mode", mode, "hostname", agent.Hostname())
 	_, err := rd.Set(rd.ctx, rd.modeKey, mode)
 	return err
 }
 
 func (rd *RedisKVDriver) GetAgentStatus() (*agent.Status, error) {
+	if !rd.cfg.Zone.Enable {
+		return &agent.Status{State: rd.cfg.DefaultState, Mode: agent.NormalMode}, nil
+	}
+
 	status := &agent.Status{State: agent.UnavailableState, Mode: agent.UnknownMode}
 	replies, err := rd.MGet(rd.ctx, rd.stateKey, rd.modeKey, rd.activeZoneKey)
 	if err != nil || len(replies) != 3 {
@@ -274,17 +275,12 @@ func (rd *RedisKVDriver) GetAgentStatus() (*agent.Status, error) {
 		return status, nil
 	}
 
-	if !rd.cfg.Zone.Enable {
-		status.State = rd.cfg.DefaultState
-		status.Mode = agent.NormalMode
-	} else {
-		status.State = replies[0]
-		status.Mode = replies[1]
-		status.ActiveZone = replies[2]
-	}
+	status.State = replies[0]
+	status.Mode = replies[1]
+	status.ActiveZone = replies[2]
 
 	if status.State == agent.UnavailableState || status.State == "" {
-		// change state to "empty" state when the previous "unavailable" value receieved
+		// change state to "empty" state when agent got status successfully and the "unavailable" value receieved
 		status.State = agent.EmptyState
 	}
 

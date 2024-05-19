@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -107,6 +106,7 @@ func NewZoneManager(ctx context.Context, cfg *config.Config, driver driver.KVDri
 	if err != nil {
 		return nil, err
 	}
+	agent.SetLocalStatus(&agent.Status{State: curStatus.State, Mode: curStatus.Mode, ActiveZone: cfg.Zone.Name})
 
 	if curStatus.State == agent.UnavailableState {
 		logging.Warn("Initial zone manager in unavailable state")
@@ -235,9 +235,6 @@ func (zm *zoneManager) getPeerStatus() ([]*eagrpc.AgentStatus, error) {
 			if err != nil {
 				return err
 			}
-			if status.State == agent.UnavailableState {
-				return nil
-			}
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -334,7 +331,7 @@ func (zm *zoneManager) checkDisconectedBackends() int {
 func (zm *zoneManager) getZoneStatus() *zoneStatus {
 	var rawZCConnected bool
 	var peerConnectedCount int
-	status := &zoneStatus{mode: agent.UnknownMode, zcConnected: false, peerConnected: true}
+	status := &zoneStatus{state: agent.EmptyState, mode: agent.UnknownMode, zcConnected: false, peerConnected: true}
 
 	disconectedBackends := zm.checkDisconectedBackends()
 	if zm.cfg.Zone.RebuildBackend {
@@ -363,8 +360,17 @@ func (zm *zoneManager) getZoneStatus() *zoneStatus {
 				"error", err,
 			)
 		}
-		status.state = kvStatus.State
-		status.mode = kvStatus.Mode
+
+		localStatus := agent.GetLocalStatus()
+		// use local state unless the state stored in backend or local state is unavailable state
+		if kvStatus.State == agent.UnavailableState || localStatus.State == agent.UnavailableState {
+			status.state = kvStatus.State
+		} else {
+			status.state = localStatus.State
+		}
+
+		// always use local mode to prevent state flipping issue in orphan mode
+		status.mode = localStatus.Mode
 	}()
 
 	go func() {
@@ -436,11 +442,6 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm 
 		)
 	}
 
-	logging.Debugw("SetAgentStatus",
-		"state", status.state, "newState", status.newState, "mode", status.mode, "newMode", status.newMode,
-		"zcConnected", status.zcConnected, "peerConnected", status.peerConnected,
-		"hostname", os.Getenv("HOSTNAME"),
-	)
 	agentStatus := &agent.Status{
 		State:         status.newState,
 		Mode:          status.newMode,
@@ -468,5 +469,6 @@ func Check(status *zoneStatus, cfg *config.Config, kvDriver driver.KVDriver, zm 
 		"state", status.state+"->"+status.newState,
 		"mode", fmt.Sprintf("%s->%s", status.mode, status.newMode),
 		"activeZone", status.activeZone,
+		"hostname", agent.Hostname(),
 	)
 }

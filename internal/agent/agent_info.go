@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,16 @@ const (
 	ActiveZoneKey = "active_zone"
 	ZoneEnableKey = "zone_enable"
 )
+
+var hostname string
+
+func init() {
+	hostname = os.Getenv("HOSTNAME")
+}
+
+func Hostname() string {
+	return hostname
+}
 
 type Status struct {
 	State         string
