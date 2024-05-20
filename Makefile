@@ -103,7 +103,7 @@ build-tests:
 test: clean-test-results
 	@printf "Run tests...\n"
 	$(foreach TEST_DIR,$(TEST_DIRS),\
-		@go test $(TEST_DIR) -tags $(BUILD_TAGS) -short -timeout=$(TEST_TIMEOUT) $(VERBOSE_TAG) -race | tee -a test.log \
+		@go test $(TEST_DIR) -short -timeout=$(TEST_TIMEOUT) $(VERBOSE_TAG) -race | tee -a test.log \
 	$(NEWLINE))
 	@! grep -q "^--- FAIL" test.log
 
