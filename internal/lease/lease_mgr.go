@@ -113,7 +113,7 @@ func (lm *LeaseManager) grantLease(ctx context.Context, name string, kind string
 
 func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, kind string, holder string) (err error) {
 	start := time.Now()
-	defer lm.postHook("resign", err == nil, start)
+	defer func() { lm.postHook("resign", err == nil, start) }()
 
 	if err = lm.preHook("resign"); err != nil {
 		return
@@ -129,7 +129,7 @@ func (lm *LeaseManager) RevokeLease(ctx context.Context, name string, kind strin
 
 func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) (err error) {
 	start := time.Now()
-	defer lm.postHook("extend_elected_term", err == nil, start)
+	defer func() { lm.postHook("extend_elected_term", err == nil, start) }()
 
 	if err = lm.preHook("extend_elected_term"); err != nil {
 		return
@@ -142,7 +142,7 @@ func (lm *LeaseManager) ExtendLease(ctx context.Context, name string, kind strin
 
 func (lm *LeaseManager) HandoverLease(ctx context.Context, name string, kind string, holder string, ttl time.Duration) (err error) {
 	start := time.Now()
-	defer lm.postHook("handover", err == nil, start)
+	defer func() { lm.postHook("handover", err == nil, start) }()
 
 	if err = lm.preHook("handover"); err != nil {
 		return
@@ -155,7 +155,7 @@ func (lm *LeaseManager) HandoverLease(ctx context.Context, name string, kind str
 
 func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind string) (holder string, err error) {
 	start := time.Now()
-	defer lm.postHook("get_leader", err == nil, start)
+	defer func() { lm.postHook("get_leader", err == nil, start) }()
 
 	if err = lm.preHook("get_leader"); err != nil {
 		return
@@ -167,7 +167,7 @@ func (lm *LeaseManager) GetLeaseHolder(ctx context.Context, name string, kind st
 
 func (lm *LeaseManager) GetLeaseHolders(ctx context.Context, kind string) (holders []driver.Holder, err error) {
 	start := time.Now()
-	defer lm.postHook("list_leaders", err == nil, start)
+	defer func() { lm.postHook("list_leaders", err == nil, start) }()
 
 	if err = lm.preHook("list_leaders"); err != nil {
 		return
