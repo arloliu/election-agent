@@ -208,7 +208,7 @@ func handoverReqN(p int, n int) *eagrpc.HandoverRequest {
 	return &eagrpc.HandoverRequest{
 		Election: fmt.Sprintf("%s-%d", electionName, p),
 		Leader:   fmt.Sprintf("client-%d-%d", p, n),
-		Term:     int32(electionTerm),
+		Term:     int32(electionTerm) * 2,
 		Kind:     electionKind,
 	}
 }
@@ -302,7 +302,7 @@ func (s *simulateClient) chooseLeader() error {
 }
 
 func (s *simulateClient) chooseLeaderAction(ctx context.Context, client eagrpc.ElectionClient, i int, j int, retries int) error {
-	hctx, cancel := context.WithTimeout(ctx, campTimeout)
+	hctx, cancel := context.WithTimeout(ctx, campTimeout*time.Duration(2))
 	defer cancel()
 
 	ret, err := client.Handover(hctx, handoverReqN(i, j))
@@ -530,7 +530,7 @@ func simulateClients(cmd *cobra.Command, args []string) error { //nolint:cyclop
 
 				count := clients.leaderChangeCount.Swap(0)
 				if count > 0 {
-					fmt.Printf("[%s] The number of leaders swicthed: %d\n", now(), count)
+					fmt.Printf("[%s] The number of leaders switched: %d\n", now(), count)
 				}
 
 				errCount1 := clients.leaderExtendErrCount.Swap(0)
