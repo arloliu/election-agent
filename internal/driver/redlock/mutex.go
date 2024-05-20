@@ -3,7 +3,6 @@ package redlock
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"math/rand"
 	"time"
 
@@ -187,9 +186,6 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 			return m.touch(ctx, conn, m.value, int64(m.expiry/time.Millisecond))
 		})
 	}()
-	if err != nil && !errors.Is(err, context.Canceled) {
-		logging.Warnw("Mutex.ExtendContext got error", "name", m.name, "value", m.value, "err", err, "n", n, "quorum", quorum, "ttl", int(m.expiry/time.Millisecond))
-	}
 
 	if n < quorum {
 		return false, err

@@ -47,6 +47,8 @@ func CreateRueidisConnections(ctx context.Context, cfg *config.Config) (ConnShar
 	connShards := make(ConnShards, shardSize)
 	for _, optss := range redisOpts {
 		for idx, opts := range optss {
+			opts.ForceSingleClient = true
+			opts.DisableCache = true
 			opts.Dialer.Timeout = 1 * time.Second
 			client, err := rueidis.NewClient(*opts)
 			conn := &rueidisConn{client: client, opts: opts, lastErr: err}
