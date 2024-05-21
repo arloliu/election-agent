@@ -84,18 +84,18 @@ func (srv *Server) startGRPC() error {
 	}
 
 	srv.grpcServer = grpc.NewServer(
-		grpc.WriteBufferSize(1024), // 1KB write buffer is far enough
-		grpc.ReadBufferSize(1024),  // 1KB read buffer is far enough
+		grpc.WriteBufferSize(4096), // 1KB write buffer is far enough
+		grpc.ReadBufferSize(4096),  // 1KB read buffer is far enough
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             10 * time.Second, // The minimum amount of time a client should wait before sending a keepalive ping
 			PermitWithoutStream: true,             // Allow pings even when there are no active streams
 		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionIdle:     15 * time.Second, // If a client is idle for 15 seconds, send a GOAWAY
-			MaxConnectionAge:      30 * time.Second, // If any connection is alive for more than 30 seconds, send a GOAWAY
-			MaxConnectionAgeGrace: 5 * time.Second,  // Allow 5 seconds for pending RPCs to complete before forcibly closing connections
-			Time:                  5 * time.Second,  // Ping the client if it is idle for 5 seconds to ensure the connection is still active
-			Timeout:               3 * time.Second,  // Wait 3 seconds for the ping ack before assuming the connection is dead
+			MaxConnectionIdle:     srv.cfg.GRPC.MaxConnectionIdle,     // If a client is idle for specified duration, send a GOAWAY
+			MaxConnectionAge:      srv.cfg.GRPC.MaxConnectionAge,      // If any connection is alive for more than specified duration, send a GOAWAY
+			MaxConnectionAgeGrace: srv.cfg.GRPC.MaxConnectionAgeGrace, // Allow specified duration or pending RPCs to complete before forcibly closing connections
+			Time:                  10 * time.Second,                   // Ping the client if it is idle for 10 seconds to ensure the connection is still active
+			Timeout:               3 * time.Second,                    // Wait 3 seconds for the ping ack before assuming the connection is dead
 		}),
 	)
 	electionService := newElectionGRPCService(srv.cfg, srv.leaseMgr, srv.kubeClient)

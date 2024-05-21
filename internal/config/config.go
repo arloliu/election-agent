@@ -87,6 +87,19 @@ type KubeConfig struct {
 type GRPCConfig struct {
 	Enable bool `default:"true" yaml:"enable"` // Whether to enable gRPC service. Defaults to `true`.
 	Port   int  `default:"443" yaml:"port"`    // Port is the gRPC service port. Defaults to `443`.
+	// MaxConnectionIdle is a duration for the amount of time after which an
+	// idle connection would be closed by sending a GoAway. Idleness duration is
+	// defined since the most recent time the number of outstanding RPCs became
+	// zero or the connection establishment.
+	MaxConnectionIdle time.Duration `default:"30s" split_words:"true" yaml:"max_connection_idle"`
+	// MaxConnectionAge is a duration for the maximum amount of time a
+	// connection may exist before it will be closed by sending a GoAway. A
+	// random jitter of +/-10% will be added to MaxConnectionAge to spread out
+	// connection storms.
+	MaxConnectionAge time.Duration `default:"300s" split_words:"true" yaml:"max_connection_age"`
+	// MaxConnectionAgeGrace is an additive period after MaxConnectionAge after
+	// which the connection will be forcibly closed.
+	MaxConnectionAgeGrace time.Duration `default:"30s" split_words:"true" yaml:"max_connection_age_grace"`
 }
 
 type HTTPConfig struct {
