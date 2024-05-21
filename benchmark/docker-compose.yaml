@@ -2,7 +2,7 @@ services:
   redis1:
     container_name: election-agent-redis1
     image: redis:7.2
-    command: --port 7000
+    command: --save "" --appendonly no --io-threads 1 --port 7000
     ports:
       - "7000:7000"
     networks:
@@ -10,7 +10,7 @@ services:
   redis1a:
     container_name: election-agent-redis1a
     image: redis:7.2
-    command: --port 7100
+    command: --save "" --appendonly no --io-threads 1 --port 7100
     ports:
       - "7100:7100"
     networks:
@@ -26,7 +26,7 @@ services:
   redis2a:
     container_name: election-agent-redis2a
     image: redis:7.2
-    command: --port 7101
+    command: --save "" --appendonly no --io-threads 1 --port 7101
     ports:
       - "7101:7101"
     networks:
@@ -34,7 +34,7 @@ services:
   redis3:
     container_name: election-agent-redis3
     image: redis:7.2
-    command: --port 7002
+    command: --save "" --appendonly no --io-threads 1 --port 7002
     ports:
       - "7002:7002"
     networks:
@@ -42,7 +42,7 @@ services:
   redis3a:
     container_name: election-agent-redis3a
     image: redis:7.2
-    command: --port 7102
+    command: --save "" --appendonly no --io-threads 1 --port 7102
     ports:
       - "7102:7102"
     networks:
