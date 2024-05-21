@@ -91,7 +91,7 @@ func getStatus(cmd *cobra.Command, args []string) error {
 
 	status := make([]*eagrpc.AgentStatus, 0, len(targets))
 	for _, target := range targets {
-		client, err := newGrpcClient(ctx, target)
+		client, err := newGrpcClient(target)
 		if err != nil {
 			reportError(err)
 		}
@@ -131,7 +131,7 @@ func setStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid mode %s", args[1])
 	}
 
-	client, err := newGrpcClient(ctx, Hostname)
+	client, err := newGrpcClient(Hostname)
 	if err != nil {
 		reportError(err)
 	}

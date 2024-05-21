@@ -40,7 +40,7 @@ func TestGRPCService(t *testing.T) {
 	require.NotNil(server)
 	defer server.Shutdown(ctx) //nolint:errcheck
 
-	conn, err := grpc.Dial("localhost:18080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("localhost:18080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(err)
 	require.NotNil(conn)
 	defer conn.Close()
@@ -127,7 +127,7 @@ func BenchmarkGRPCService(b *testing.B) {
 
 	defer server.Shutdown(ctx) //nolint:errcheck
 
-	conn, err := grpc.Dial("localhost:18080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("localhost:18080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		b.FailNow()
 	}
