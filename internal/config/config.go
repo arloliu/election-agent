@@ -260,6 +260,7 @@ func (cfg *Config) IsBenchmarkEnv() bool {
 
 func GrpcClientServiceConfig(timeout time.Duration, maxAttempts int, waitForReady bool) string {
 	cfg := `{
+		"loadBalancingConfig": [{"round_robin":{}}],
 		"methodConfig": [{
 			"name": [{"service": "grpc.election_agent.v1.Control"}, {"service": "grpc.election_agent.v1.Election"}],
 			"waitForReady": %t,
