@@ -26,33 +26,40 @@ import (
 )
 
 var (
-	numClients    int
-	numCandidates int
-	electionName  string
-	electionKind  string
-	interval      int
-	electionTerm  int
-	simDuration   time.Duration
-	campTimeout   time.Duration
-	extendTimeout time.Duration
-	simState      string
-	leaderResign  bool
-	forever       bool
-	displayRPS    bool
+	numClients      int
+	numCandidates   int
+	electionName    string
+	electionKind    string
+	interval        int
+	electionTerm    int
+	simDuration     time.Duration
+	campTimeout     time.Duration
+	extendTimeout   time.Duration
+	handoverTimeout time.Duration
+	warmUpDuration  time.Duration
+	simState        string
+	leaderResign    bool
+	forever         bool
+	displayRPS      bool
 )
 
 var (
-	finished      atomic.Bool
-	finishedCount atomic.Int32
+	finished            atomic.Bool
+	finishedCount       atomic.Int32
+	handoverDuration    atomic.Int64
+	handoverCount       atomic.Int64
+	maxHandoverDuration atomic.Int64
 )
 
-const ctxSimTimeout = 6 * time.Second
+const ctxSimTimeout = 30 * time.Second
 
 func init() {
 	rootCmd.AddCommand(simulateCmd)
 	simulateCmd.Flags().BoolVarP(&leaderResign, "resign", "r", false, "resign all election and exit")
 	simulateCmd.Flags().DurationVarP(&campTimeout, "camp_timeout", "a", 1*time.Second, "election campaign request timeout")
 	simulateCmd.Flags().DurationVarP(&extendTimeout, "extend_timeout", "x", 1*time.Second, "election extend request timeout")
+	simulateCmd.Flags().DurationVarP(&handoverTimeout, "handover_timeout", "o", 10*time.Second, "election handover request timeout")
+	simulateCmd.Flags().DurationVarP(&warmUpDuration, "warm_up", "w", 10*time.Second, "the warn up duration to complete handover")
 	simulateCmd.Flags().BoolVarP(&forever, "forever", "f", false, "simulate forever even error occurs")
 	simulateCmd.Flags().BoolVarP(&displayRPS, "display", "p", false, "display request per seconds information")
 	simulateCmd.Flags().IntVarP(&numClients, "num", "n", 100, "number of clients")
@@ -97,9 +104,10 @@ func newCandidateCampError(format string, a ...any) *CandidateCampError {
 }
 
 type electionCandidate struct {
-	conn   *grpc.ClientConn
-	client eagrpc.ElectionClient
-	leader bool
+	conn       *grpc.ClientConn
+	client     eagrpc.ElectionClient
+	leader     bool
+	handovered atomic.Bool
 }
 
 type candidatePeers struct {
@@ -117,6 +125,19 @@ func (c *candidatePeers) members() []*electionCandidate {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.candaidates
+}
+
+func (c *candidatePeers) handovered() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, m := range c.candaidates {
+		if m.leader && m.handovered.Load() {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (c *candidatePeers) setLeader(idx int) int {
@@ -144,6 +165,7 @@ type simulateClient struct {
 	ctx                   context.Context
 	peers                 []*candidatePeers
 	reqCount              atomic.Int64
+	maxReqDuration        atomic.Int64
 	leaderChangeCount     atomic.Int32
 	leaderExtendErrCount  atomic.Int32
 	candidateCampErrCount atomic.Int32
@@ -264,45 +286,36 @@ func (s *simulateClient) resignLeaders() error {
 	return errs.Wait()
 }
 
-func (s *simulateClient) chooseLeader() error {
-	errs, _ := errgroup.WithContext(s.ctx)
-
-	for i, peers := range s.peers {
-		i := i
-		peers := peers
-		errs.Go(func() error {
-			for j, c := range peers.members() {
-				if !c.leader {
-					continue
-				}
-
-				start := time.Now()
-				var err error
-				for retries := 0; retries < 3; retries++ {
-					err = func() error {
-						ctx, cancel := context.WithTimeout(s.ctx, ctxSimTimeout)
-						defer cancel()
-						return s.chooseLeaderAction(ctx, c.client, i, j, retries)
-					}()
-					if err == nil {
-						break
-					}
-				}
-				if err != nil {
-					fmt.Printf("Choose leader fail, elapsed: %s, error: %s\n", time.Since(start).String(), err.Error())
-					return err
-				}
-			}
-
-			return nil
-		})
+func (s *simulateClient) handoverLeader(ctx context.Context, c *electionCandidate, i int, j int) error {
+	start := time.Now()
+	var err error
+	for retries := 0; retries < 3; retries++ {
+		err = func() error {
+			ctx, cancel := context.WithTimeout(ctx, ctxSimTimeout)
+			defer cancel()
+			return s.handoverLeaderAction(ctx, c.client, i, j, retries)
+		}()
+		if err == nil {
+			break
+		}
+	}
+	elasped := int64(time.Since(start))
+	handoverDuration.Add(elasped)
+	handoverCount.Add(1)
+	if maxHandoverDuration.Load() < elasped {
+		maxHandoverDuration.Store(elasped)
 	}
 
-	return errs.Wait()
+	if err != nil {
+		fmt.Printf("Choose leader fail, elapsed: %s, error: %s\n", time.Since(start).String(), err.Error())
+		return err
+	}
+	c.handovered.Store(true)
+	return nil
 }
 
-func (s *simulateClient) chooseLeaderAction(ctx context.Context, client eagrpc.ElectionClient, i int, j int, retries int) error {
-	hctx, cancel := context.WithTimeout(ctx, campTimeout*time.Duration(2))
+func (s *simulateClient) handoverLeaderAction(ctx context.Context, client eagrpc.ElectionClient, i int, j int, retries int) error {
+	hctx, cancel := context.WithTimeout(ctx, handoverTimeout)
 	defer cancel()
 
 	ret, err := client.Handover(hctx, handoverReqN(i, j))
@@ -334,15 +347,24 @@ func (s *simulateClient) chooseLeaderAction(ctx context.Context, client eagrpc.E
 }
 
 func (s *simulateClient) peerCampaign(ctx context.Context, i int, j int) error {
+	if !s.peers[i].handovered() {
+		return nil
+	}
+
 	var err error
 	client := s.peers[i].member(j)
 	for retries := 0; retries < 3; retries++ {
+		start := time.Now()
 		err = func() error {
 			cctx, cancel := context.WithTimeout(ctx, ctxSimTimeout)
 			defer cancel()
 
 			return s.peerCampaignAction(cctx, client, i, j)
 		}()
+		elapsed := int64(time.Since(start))
+		if s.maxReqDuration.Load() < elapsed {
+			s.maxReqDuration.Store(elapsed)
+		}
 		if err == nil {
 			break
 		}
@@ -436,8 +458,20 @@ func (s *simulateClient) simulateWorker(ctx context.Context, i int, j int, resul
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 	defer ticker.Stop()
 
+	c := s.peers[i].member(j)
+	if c.leader {
+		err := s.handoverLeader(ctx, c, i, j)
+		if err != nil {
+			resultChan <- err
+			return
+		}
+	}
+
+	var execFinished atomic.Bool
 	for {
+		execFinished.Store(false)
 		err := s.peerCampaign(ctx, i, j)
+		execFinished.Store(true)
 		if err != nil {
 			if forever {
 				err1 := &LeaderExtendError{}
@@ -457,6 +491,9 @@ func (s *simulateClient) simulateWorker(ctx context.Context, i int, j int, resul
 		select {
 		case <-ctx.Done():
 			if finished.Load() {
+				for !execFinished.Load() {
+					time.Sleep(100 * time.Millisecond)
+				}
 				finishedCount.Add(1)
 			}
 			resultChan <- nil
@@ -478,8 +515,12 @@ func simulateClients(cmd *cobra.Command, args []string) error { //nolint:cyclop
 		fmt.Printf("Resign all elections, clients: %d, candidates: %d\n", numClients, numCandidates)
 	} else {
 		duration = simDuration
-		fmt.Printf("Simulate %s state has started, clients: %d, candidates: %d, duration: %s, req_timeout: %s, forever: %t\n",
-			simState, numClients, numCandidates, duration.String(), campTimeout.String(), forever)
+		msg := "[%s] Simulate %s state, clients: %d, candidates: %d, election: %s, kind: %s, duration: %s forever: %t\n"
+		msg += "camp_timeout: %s, extend_timeout: %s, handover_timeout: %s\n"
+		fmt.Printf(msg,
+			now(), simState, numClients, numCandidates, electionName, electionKind, duration.String(), forever,
+			campTimeout, extendTimeout, handoverTimeout,
+		)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
@@ -500,24 +541,25 @@ func simulateClients(cmd *cobra.Command, args []string) error { //nolint:cyclop
 		return nil
 	}
 
-	// choose active clients and campaign first
-	start := time.Now()
-	if err := clients.chooseLeader(); err != nil {
-		fmt.Printf("[%s] Got error:%s\n", now(), err)
-		return err
-	}
-	elapsed := time.Since(start)
-	rps := float64(numClients) / elapsed.Seconds()
-	fmt.Printf("[%s] Handover %d leaders took %s, RPS: %.1f \n", now(), numClients, elapsed.String(), rps)
-
 	resultChan := make(chan error)
 
 	// start simulation
+	simDelay := warmUpDuration / time.Duration(numClients/10)
+	fmt.Printf("[%s] Starting %d simulation workers in %s warm up duration\n", now(), numClients*numCandidates, warmUpDuration)
+
 	for i := 0; i < numClients; i++ {
+		if i > 0 && (i%10) == 0 {
+			time.Sleep(simDelay)
+		}
 		for j := 0; j < numCandidates; j++ {
 			go clients.simulateWorker(ctx, i, j, resultChan)
 		}
 	}
+
+	avgHandoverDuration := time.Duration(handoverDuration.Load()) / time.Duration(handoverCount.Load())
+	fmt.Printf("[%s] All Simulation workers started, avg handover duration: %s, max handover duration:: %s\n",
+		now(), avgHandoverDuration, time.Duration(maxHandoverDuration.Load()),
+	)
 
 	if forever {
 		foreverTicket := time.NewTicker(time.Duration(interval) * time.Millisecond)
@@ -542,23 +584,26 @@ func simulateClients(cmd *cobra.Command, args []string) error { //nolint:cyclop
 		}()
 	}
 
-	if displayRPS {
-		displayTicker := time.NewTicker(2 * time.Second)
-		defer displayTicker.Stop()
-		cycleStart := time.Now()
-		go func() {
-			for range displayTicker.C {
-				if finished.Load() {
-					break
-				}
-
-				count := clients.reqCount.Swap(0)
-				rps := float64(count) / time.Since(cycleStart).Seconds()
-				cycleStart = time.Now()
-				fmt.Printf("[%s] Election RPS: %.1f\n", now(), rps)
+	displayTicker := time.NewTicker(2 * time.Second)
+	defer displayTicker.Stop()
+	cycleStart := time.Now()
+	go func() {
+		clients.reqCount.Store(0)
+		clients.maxReqDuration.Store(0)
+		for range displayTicker.C {
+			if finished.Load() {
+				break
 			}
-		}()
-	}
+
+			count := clients.reqCount.Swap(0)
+			maxReq := time.Duration(clients.maxReqDuration.Swap(0))
+			if displayRPS {
+				rps := float64(count) / time.Since(cycleStart).Seconds()
+				fmt.Printf("[%s] Election RPS: %.1f, max req. duration: %s\n", now(), rps, maxReq)
+			}
+			cycleStart = time.Now()
+		}
+	}()
 
 	for i := 0; i < numClients*numCandidates; i++ {
 		select {
