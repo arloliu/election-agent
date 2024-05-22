@@ -12,6 +12,8 @@ import (
 	yaml "sigs.k8s.io/yaml/goyaml.v2"
 )
 
+var Version string
+
 // Config is the global configuration for application.
 // It reads values from environment variables or a yaml config file
 type Config struct {
@@ -26,6 +28,9 @@ type Config struct {
 
 	// The name of election agent. It's required when `Zone.Enable` is `true`
 	Name string `default:"election-agent" yaml:"name"`
+
+	// The version of app. Should be a git commit hash if defined
+	Version string `default:"undefined"`
 
 	// Prefix specifies the key prefix.
 	// The lease key will be formatted as `[cfg.KeyPrefix]/lease/<lease name>`.
@@ -224,6 +229,10 @@ func Init() error {
 	// The settings in the config file will override environment variables
 	if err := loadYAMLConfig(&cfg); err != nil {
 		return err
+	}
+
+	if Version != "" {
+		cfg.Version = Version
 	}
 
 	// TODO: implement stricter sanity check

@@ -16,7 +16,8 @@ GOOS        ?= $(shell go env GOOS)
 GOARCH      ?= $(shell go env GOARCH)
 GOPATH      ?= $(shell go env GOPATH)
 CGO_ENABLED ?= 0
-LDFLAGS ?= -ldflags="-s -w"
+GIT_COMMIT_HASH ?= $(shell git describe --always --long)
+LDFLAGS ?= -ldflags="-s -w -X election-agent/internal/config.Version=$(GIT_COMMIT_HASH)"
 V ?= 0
 ifeq ($(V), 1)
 override VERBOSE_TAG := -v

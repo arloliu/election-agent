@@ -35,6 +35,8 @@ func main() {
 	ctx := context.Background()
 	cfg := config.GetDefault()
 
+	logging.Infow("Election Agent", "version", cfg.Version)
+
 	switch cfg.Driver {
 	case "goredis", "rueidis":
 		kvDriver, err = driver.NewRedisKVDriver(ctx, cfg)
