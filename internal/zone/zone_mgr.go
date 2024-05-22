@@ -302,7 +302,7 @@ func (zm *zoneManager) createPeerClients() ([]eagrpc.ControlClient, error) {
 	svcConfig := config.GrpcClientServiceConfig(zm.cfg.Zone.PeerTimeout, 10, true)
 
 	for _, peerURL := range zm.cfg.Zone.PeerURLs {
-		conn, err := grpc.NewClient(peerURL,
+		conn, err := grpc.DialContext(zm.ctx, peerURL,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultServiceConfig(svcConfig),
 		)

@@ -96,11 +96,11 @@ func newBenchmarkClient(ctx context.Context, host string, n int) *grpcBenchmarkC
 }
 
 func (c *grpcBenchmarkClient) Setup() error {
-	errs := errgroup.Group{}
+	errs, ctx := errgroup.WithContext(c.ctx)
 	for i := 0; i < c.n; i++ {
 		idx := i
 		errs.Go(func() error {
-			conn, err := grpc.NewClient(c.target,
+			conn, err := grpc.DialContext(ctx, c.target,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 			)

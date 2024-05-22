@@ -160,7 +160,7 @@ func newSimulateClient(ctx context.Context) (*simulateClient, error) {
 		inst.peers[i] = &candidatePeers{candaidates: make([]*electionCandidate, numCandidates)}
 		leaderIdx := rand.Intn(numCandidates) //nolint:gosec
 		for j := 0; j < numCandidates; j++ {
-			conn, err := grpc.NewClient(Hostname,
+			conn, err := grpc.DialContext(ctx, Hostname,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithDefaultServiceConfig(svcConfig),
 			)

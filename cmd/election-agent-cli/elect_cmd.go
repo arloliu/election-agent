@@ -40,7 +40,7 @@ func campaign(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -80,7 +80,7 @@ func extendElectedTerm(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -140,7 +140,7 @@ func resign(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -174,7 +174,7 @@ func handover(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -214,7 +214,7 @@ func getLeader(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -251,7 +251,7 @@ func getLeaders(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}
@@ -289,7 +289,7 @@ func getPods(cmd *cobra.Command, args []string) error {
 		return errors.New("hostname is required, please use -h or --host to specify hostname")
 	}
 
-	client, err := newGrpcClient(Hostname)
+	client, err := newGrpcClient(ctx, Hostname)
 	if err != nil {
 		reportError(err)
 	}

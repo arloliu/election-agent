@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 	"time"
@@ -22,13 +23,13 @@ type grpcClient struct {
 	Control  eagrpc.ControlClient
 }
 
-func newGrpcClient(host string) (*grpcClient, error) {
+func newGrpcClient(ctx context.Context, host string) (*grpcClient, error) {
 	var err error
 	c := &grpcClient{}
 
 	svcConfig := config.GrpcClientServiceConfig(ctxTimeout, 10, true)
 
-	c.Conn, err = grpc.NewClient(host,
+	c.Conn, err = grpc.DialContext(ctx, host,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(svcConfig),
 	)
