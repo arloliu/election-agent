@@ -108,6 +108,10 @@ test: clean-test-results
 	$(NEWLINE))
 	@! grep -q "^--- FAIL" test.log
 
+e2e-test: clean-test-results
+	@printf "Run ene-to-end tests...\n"
+	@E2E_TEST=Y go test -timeout 15m election-agent/e2e-test -v
+
 ##### Coverage #####
 $(COVER_ROOT):
 	@mkdir -p $(COVER_ROOT)

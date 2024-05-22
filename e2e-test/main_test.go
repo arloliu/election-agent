@@ -48,7 +48,7 @@ func TestMain(m *testing.M) { //nolint:cyclop,gocyclo
 		log.Fatalf("failed to build envconf from flags: %s", err)
 	}
 
-	if testing.Short() {
+	if os.Getenv("E2E_TEST") == "" || testing.Short() {
 		os.Exit(0)
 	}
 
