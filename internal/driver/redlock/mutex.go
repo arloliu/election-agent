@@ -186,6 +186,13 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 			return m.touch(ctx, conn, m.value, int64(m.expiry/time.Millisecond))
 		})
 	}()
+	if err != nil {
+		logging.Warnw("Mutex.ExtendContext got error",
+			"name", m.name, "holder", m.name, "err", err, "n", n, "quorum", quorum,
+			"ttl", int(m.expiry/time.Millisecond),
+			"duration", time.Since(start),
+		)
+	}
 
 	if n < quorum {
 		return false, err
@@ -209,7 +216,11 @@ func (m *Mutex) HandoverContext(ctx context.Context, holder string) (bool, error
 		return m.handover(ctx, conn, holder, int64(m.expiry/time.Millisecond))
 	})
 	if err != nil {
-		logging.Warnw("Mutex.HandoverContext got error", "name", m.name, "holder", holder, "err", err, "n", n, "quorum", quorum, "ttl", int(m.expiry/time.Millisecond))
+		logging.Warnw("Mutex.HandoverContext got error",
+			"name", m.name, "holder", holder, "err", err, "n", n, "quorum", quorum,
+			"ttl", int(m.expiry/time.Millisecond),
+			"duration", time.Since(start),
+		)
 	}
 
 	if n < quorum {
