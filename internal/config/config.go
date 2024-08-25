@@ -169,6 +169,15 @@ type ZoneConfig struct {
 	CheckTimeout time.Duration `default:"3s" split_words:"true" yaml:"check_timeout"`
 
 	// The zone coordinator's url.
+	//
+	// The origin v1 zone information exists on [zc_uri]/ or [zc_uri]/v1
+	//
+	// The v2 zone information exists on [zc_uri]/v2/[group_name]
+	//
+	// It must to specify `group_name` to get a list of zones.
+	// Election agent will use the first zone name as the active one.
+	//
+	// For example, to use default group of v2 zone info, set it to: `http://zc_uri/v2/default`
 	CoordinatorURL string `split_words:"true" yaml:"coordinator_url"`
 	// The request timeout of zone coordinator.
 	// Defaults to `3s`.

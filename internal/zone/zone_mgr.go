@@ -2,10 +2,12 @@ package zone
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -196,7 +198,29 @@ func (zm *zoneManager) getActiveZone() (string, bool) {
 		return zm.activeZone, false
 	}
 
-	return string(body), true
+	zcVer := resp.Header.Get("X-Api-Version")
+	contentType := resp.Header.Get("Content-Type")
+
+	if zcVer == "v1" || strings.Contains(contentType, "text/plain") {
+		return string(body), true
+	} else if strings.Contains(contentType, "application/json") {
+		var zones []string
+		err := json.Unmarshal(body, &zones)
+		if err != nil {
+			logging.Warnw("Failed to decode zone coordinator v2 zone", "error", err)
+			return zm.activeZone, false
+		}
+
+		if len(zones) == 0 {
+			logging.Warn("The zone coordinator v2 zone list is empty")
+			return zm.activeZone, false
+		}
+		return zones[0], true
+	} else {
+		logging.Warn("Invalid zone coordinator respponse")
+	}
+
+	return zm.activeZone, false
 }
 
 func (zm *zoneManager) checkPeerConnected() (bool, int) {

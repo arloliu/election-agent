@@ -161,7 +161,7 @@ func TestZoneManager_ActiveZone(t *testing.T) {
 
 	ctx := context.TODO()
 
-	zcServer := zc.NewServer(10900, "z1")
+	zcServer, _ := zc.NewServer(10900, "default:z1,z2;test:z2,z1", "v2")
 	require.NotNil(zcServer)
 
 	go func() {
@@ -183,7 +183,7 @@ func TestZoneManager_ActiveZone(t *testing.T) {
 		Zone: config.ZoneConfig{
 			Enable:             true,
 			Name:               "test-zone1",
-			CoordinatorURL:     "http://localhost:10900",
+			CoordinatorURL:     "http://localhost:10900/v2/default",
 			CoordinatorTimeout: time.Second,
 			CoordinatorTTL:     zcTTL,
 			PeerURLs:           []string{"fake_peer"},
