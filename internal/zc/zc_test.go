@@ -130,9 +130,16 @@ func TestZC_V2(t *testing.T) {
 	require.NoError(err)
 	require.Equal([]string{"z1", "z2"}, zones)
 
-	// test v2 non-exist path
-	resp, _ = sendZCReq("http://localhost:11900/v2/nonexist", require)
-	require.Equal(http.StatusNotFound, resp.StatusCode)
+	// test v2 non-exist path, expects to get default zone list
+	resp, body = sendZCReq("http://localhost:11900/v2/nonexist", require)
+	zcVer = resp.Header.Get("X-Api-Version")
+	contentType = resp.Header.Get("Content-Type")
+	require.Equal("v2", zcVer)
+	require.Contains(contentType, "application/json")
+
+	err = json.Unmarshal(body, &zones)
+	require.NoError(err)
+	require.Equal([]string{"z2", "z1"}, zones)
 }
 
 func sendZCReq(url string, require *require.Assertions) (*http.Response, []byte) {

@@ -97,9 +97,9 @@ func (s *Server) handlerV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zones, ok := s.zoneMap[path]
+	// fallback to 'default' group
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
-		return
+		zones = s.zoneMap["default"]
 	}
 
 	jsonData, err := json.Marshal(zones)
