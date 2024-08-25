@@ -46,11 +46,24 @@ func main() {
 
 	zone := os.Getenv("ZC_ZONE")
 	if zone == "" {
-		logging.Fatalw("The `ZC_ZONE` environment variable can't be empty", "error", err)
+		logging.Fatal("The `ZC_ZONE` environment variable can't be empty")
 	}
-	logging.Infow("Environment variable", "ZC_ZONE", zone, "ZC_PORT", port)
 
-	server := zc.NewServer(port, zone)
+	version := os.Getenv("ZC_VERSION")
+	// set default zc version to v2
+	if version == "" {
+		version = "v2"
+	}
+	if version != "v1" && version != "v2" {
+		logging.Fatalw("The `ZC_VERSION` environment variable must be v1 or v2")
+	}
+
+	logging.Infow("Environment variable", "ZC_ZONE", zone, "ZC_PORT", port, "ZC_VERSION", version)
+
+	server, err := zc.NewServer(port, zone, version)
+	if err != nil {
+		logging.Fatalw("Failed to parse v2 zone string", "error", err)
+	}
 
 	processed := make(chan struct{})
 	go func() {
