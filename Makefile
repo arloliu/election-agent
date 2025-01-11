@@ -16,8 +16,9 @@ GOOS        ?= $(shell go env GOOS)
 GOARCH      ?= $(shell go env GOARCH)
 GOPATH      ?= $(shell go env GOPATH)
 CGO_ENABLED ?= 0
-GIT_COMMIT_HASH ?= $(shell git describe --always --long)
-LDFLAGS ?= -ldflags="-s -w -X election-agent/internal/config.Version=$(GIT_COMMIT_HASH)"
+GIT_TAG_OR_HASH := $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)
+
+LDFLAGS ?= -ldflags="-s -w -X election-agent/internal/config.Version=$(GIT_TAG_OR_HASH)"
 V ?= 0
 ifeq ($(V), 1)
 override VERBOSE_TAG := -v
@@ -83,10 +84,10 @@ update-protobuf:
 	@printf "Install/update protobuf tools...\n"
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0
 	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
-
 update-mockery:
 	@printf "Install/update mockery tool...\n"
 	@go install github.com/vektra/mockery/v2@v2.40.3
+
 
 update-linter:
 	@printf "Install/update linter tool...\n"
