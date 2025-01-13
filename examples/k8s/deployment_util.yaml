@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: election-agent-util
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: election-agent-util
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        sidecar.istio.io/proxyCPU: 500m
+        sidecar.istio.io/proxyCPULimit: 1000m
+        sidecar.istio.io/proxyMemory: 100Mi
+        sidecar.istio.io/proxyMemoryLimit: 200Mi
+      labels:
+        app.kubernetes.io/name: election-agent-util
+    spec:
+      restartPolicy: Always
+      serviceAccountName: election-agent
+      automountServiceAccountToken: true
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: election-agent-kz1
+              app.kubernetes.io/name: election-agent
+      containers:
+        - name: election-agent-util
+          envFrom:
+          - configMapRef:
+              name: env-vars
+          image: election-agent-util:latest
+          imagePullPolicy: Never
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 400Mi
+            limits:
+              cpu: 1500m
+              memory: 1000Mi

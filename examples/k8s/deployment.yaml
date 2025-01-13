@@ -56,7 +56,7 @@ spec:
             - containerPort: 443
               name: grpc
               protocol: TCP
-          image: election-agent:distroless-base-nossl
+          image: election-agent:latest
           imagePullPolicy: Never
           livenessProbe:
             grpc:
