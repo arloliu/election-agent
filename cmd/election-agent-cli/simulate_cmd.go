@@ -230,7 +230,7 @@ func handoverReqN(p int, n int) *eagrpc.HandoverRequest {
 	return &eagrpc.HandoverRequest{
 		Election: fmt.Sprintf("%s-%d", electionName, p),
 		Leader:   fmt.Sprintf("client-%d-%d", p, n),
-		Term:     int32(electionTerm) * 2,
+		Term:     int32(electionTerm) * 2, //nolint:gosec
 		Kind:     electionKind,
 	}
 }
@@ -240,7 +240,7 @@ func campReqN(p int, n int) *eagrpc.CampaignRequest {
 		Election:  fmt.Sprintf("%s-%d", electionName, p),
 		Candidate: fmt.Sprintf("client-%d-%d", p, n),
 		Kind:      electionKind,
-		Term:      int32(electionTerm),
+		Term:      int32(electionTerm), //nolint:gosec
 	}
 }
 
@@ -249,7 +249,7 @@ func extendReqN(p int, n int) *eagrpc.ExtendElectedTermRequest {
 		Election: fmt.Sprintf("%s-%d", electionName, p),
 		Leader:   fmt.Sprintf("client-%d-%d", p, n),
 		Kind:     electionKind,
-		Term:     int32(electionTerm),
+		Term:     int32(electionTerm), //nolint:gosec
 		Retries:  3,
 	}
 }

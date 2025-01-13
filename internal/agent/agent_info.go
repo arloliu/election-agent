@@ -99,7 +99,8 @@ func NewState(state string, ttl time.Duration) *State {
 }
 
 func (s *State) Load() string {
-	return s.val.Load().(string)
+	st, _ := s.val.Load().(string)
+	return st
 }
 
 func (s *State) Store(val string) {
@@ -116,15 +117,15 @@ func (s *State) Expired() bool {
 }
 
 func (s *State) IsActive() bool {
-	return s.val.Load().(string) == ActiveState
+	return s.Load() == ActiveState
 }
 
 func (s *State) IsStandby() bool {
-	return s.val.Load().(string) == StandbyState
+	return s.Load() == StandbyState
 }
 
 func (s *State) IsUnavailable() bool {
-	return s.val.Load().(string) == UnavailableState
+	return s.Load() == UnavailableState
 }
 
 func FlipState(state string) string {

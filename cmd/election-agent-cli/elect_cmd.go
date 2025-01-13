@@ -278,10 +278,12 @@ func getLeaders(cmd *cobra.Command, args []string) error {
 }
 
 var podsCmd = &cobra.Command{
-	Use:   "pods <namespace> <deployment>",
-	Short: "Get a list of pod information",
-	Args:  cobra.ExactArgs(2),
-	RunE:  getPods,
+	Use:   "pods <namespace> <deployment> <pod-name>",
+	Short: "Get a list of pod information by namespace and matching deployment or pod name",
+	Long: `Get a list of pod information by namespace and matching deployment or pod name.
+If the pod name is provided, it will try to find the deployment name by the pod name instead of deployment name.`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: getPods,
 }
 
 func getPods(cmd *cobra.Command, args []string) error {
@@ -298,6 +300,11 @@ func getPods(cmd *cobra.Command, args []string) error {
 		Namespace:  args[0],
 		Deployment: args[1],
 	}
+
+	if len(args) == 3 {
+		req.PodName = args[2]
+	}
+
 	result, err := client.Election.GetPods(ctx, req)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {

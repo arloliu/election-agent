@@ -253,7 +253,7 @@ func (s *ElectionHTTPService) getPods(c *gin.Context) {
 		return
 	}
 
-	pods, err := s.kubeClient.GetPods(namespace, deployment)
+	pods, err := s.kubeClient.GetPods(namespace, deployment, "")
 	if err != nil {
 		statusCode := http.StatusBadRequest
 		if pods != nil && len(pods.Items) == 0 {

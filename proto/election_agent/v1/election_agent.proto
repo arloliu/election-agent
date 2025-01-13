@@ -2,143 +2,235 @@ syntax = "proto3";
 package grpc.election_agent.v1;
 option go_package = "election-agent/grpc/election_agent_v1";
 
+// Empty is an empty message.
 message Empty {}
 
+// BoolValue is a message that contains a boolean value.
 message BoolValue {
   bool value = 1;
 }
 
+// StringValue is a message that contains a string value.
 message StringValue {
   string value = 1;
 }
 
+// Pods is a message that contains a list of Pod.
 message Pods {
   repeated Pod items = 1;
 }
 
+// Pod is a message that contains the information of a pod.
 message Pod {
+  // the name of the pod.
   string name = 1;
+  // the deployment name of the pod.
   string deployment = 2;
+  // the ip address of the pod.
   string ip = 3;
+  // the status of the pod.
   PodStatus status = 4;
+  // the replica set information of the pod.
   ReplicaSet replicaSet = 5;
 }
 
+// PodStatus is a message that contains the status of a pod.
 message PodStatus {
+  // the current phase of the pod.
+  // e.g. Running, Pending, Succeeded, Failed, Unknown.
   string phase = 1;
+  // the reason of the phase.
+  // e.g. NodeLost, PodInitializing, ContainerCreating, CrashLoopBackOff, etc.
   string reason = 2;
+  // whether the pod is terminating.
   bool terminating = 3;
+  // whether the pod is scheduled.
   bool podScheduled = 4;
+  // whether the pod is initialized.
   bool podInitialized = 5;
+  // whether the pod is ready.
   bool podReady = 6;
+  // whether the containers are ready.
   bool containersReady = 7;
 }
 
+// ReplicaSet is a message that contains the information of a replica set.
 message ReplicaSet {
+  // the name of the replica set.
   string name = 1;
+  // the revision of the replica set. it's useful to determine the newer version of the replica set.
   int32 revision = 2;
+  // the number of available replicas.
   int32 availableReplicas = 3;
+  // the number of fully labeled replicas.
   int32 fullyLabeledReplicas = 4;
+  // the number of ready replicas.
   int32 readyReplicas = 5;
+  // the number of replicas.
   int32 replicas = 6;
+  // the number of desired replicas.
   int32 desiredReplicas = 7;
+  // the maximum number of replicas.
   int32 maxReplicas = 8;
 }
 
+// CampaignRequest is the request message for the Campaign method.
 message CampaignRequest {
-  // the election name
+  // the election name.
   string election = 1;
-  // the candidate name
+  // the candidate name.
   string candidate = 2;
-  // the number of milliseconds for this election term
+  // the number of milliseconds for this election term.
   int32 term = 3;
-  // the kind of election, useful for group elections. defaults to "default"
+  // the kind of election, useful for group elections. defaults to "default".
   string kind = 4;
 }
 
+// CampaignResult is the response message for the Campaign method.
 message CampaignResult {
+  // whether the candidate is elected
   bool elected = 1;
+  // the leader name.
   string leader = 2;
-  // the kind of election, useful for group elections. defaults to "default"
+  // the kind of election, useful for group elections. defaults to "default".
   string kind = 3;
 }
 
+// ExtendElectedTermRequest is the request message for the ExtendElectedTerm method.
 message ExtendElectedTermRequest {
-  // the election name
+  // the election name.
   string election = 1;
-  // the leader name
+  // the leader name.
   string leader = 2;
-  // the number of milliseconds for this election term
+  // the number of milliseconds for this election term.
   int32 term = 3;
-  // the kind of election, useful for group elections. defaults to "default"
+  // the kind of election, useful for group elections. defaults to "default".
   string kind = 4;
-  // the number of retries, betwwen 0 ~ 10
+  // the number of retries, betwwen 0 ~ 10.
   int32 retries = 5;
-  // the number of milliseconds between retries, between 0 ~ 1000ms
+  // the number of milliseconds between retries, between 0 ~ 1000ms.
   int32 retry_interval = 6;
 }
 
+// ResignRequest is the request message for the Resign method.
 message ResignRequest {
-  // the election name
+  // the election name.
   string election = 1;
-  // the leader name
+  // the leader name.
   string leader = 2;
-  // the kind of election, useful for group elections. defaults to "default"
+  // the kind of election, useful for group elections. defaults to "default".
   string kind = 3;
 }
 
+// HandoverRequest is the request message for the Handover method.
 message HandoverRequest {
-  // the election name
+  // the election name.
   string election = 1;
-  // the new leader name
+  // the new leader name.
   string leader = 2;
-  // the number of milliseconds for this election term
+  // the number of milliseconds for this election term.
   int32 term = 3;
-  // the kind of election, useful for group elections. defaults to "default"
+  // the kind of election, useful for group elections. defaults to "default".
   string kind = 4;
 }
 
+// GetLeaderRequest is the request message for the GetLeader method.
 message GetLeaderRequest {
+  // the election name.
   string election = 1;
-  // the kind of election, useful for group elections. defaults to "default"
+  // the kind of election, useful for group elections. defaults to "default".
   string kind = 2;
 }
 
+// GetPodsRequest is the request message for the GetPods method.
+// It contains the namespace, deployment and pod_name of the pods being queried.
+//   * If the deployment is provided, the deployment will be used to query the pods.
+//   * If the pod_name is provided, the pod_name will be used to query the pods.
+//   * If both deployment and pod_name are provided, the pod_name will be used.
 message GetPodsRequest {
+  // the namespace of the pods being queried.
   string namespace = 1;
+  // the deployment of the pods being queried, it can be empty if pod_name is provided.
+  // if both deployment and pod_name are provided, the pod_name will be used.
   string deployment = 2;
+  // the pod name being queried, it can be empty if deployment is provided.
+  // if both deployment and pod_name are provided, the pod_name will be used.
+  string pod_name = 3;
 }
 
+// ListLeadersRequest is the request message for the ListLeaders method.
 message ListLeadersRequest {
+  // the kind of election to list the leaders.
   string kind = 1;
 }
 
+// Leader is a message that contains the information of a leader.
 message Leader {
+  // the election name.
   string election = 1;
+  // the leader name.
   string name = 2;
 }
+
+// Leaders is a message that contains a list of Leader.
 message Leaders {
   repeated Leader leaders = 1;
 }
+
+// Election is the service that provides the election methods.
 service Election {
+  // Campaign is the method that allows a candidate to campaign for the election.
+  // It returns the result of the election.
   rpc Campaign(CampaignRequest) returns (CampaignResult);
+
+  // ExtendElectedTerm is the method that allows the elected leader to extend the elected term.
+  // It returns whether the term is extended.
   rpc ExtendElectedTerm(ExtendElectedTermRequest) returns (BoolValue);
+
+  // Resign is the method that allows the leader to resign from the election.
+  // It returns whether the leader has resigned.
   rpc Resign(ResignRequest) returns (BoolValue);
+
+  // Handover is the method that allows the leader to handover the leadership to another candidate.
+  // It returns whether the handover is successful.
   rpc Handover(HandoverRequest) returns (BoolValue);
+
+  // GetLeader is the method that allows to get the leader of the election.
+  // It returns the leader name.
   rpc GetLeader(GetLeaderRequest) returns (StringValue);
+
+  // ListLeaders is the method that allows to list the leaders of the election.
+  // It returns the list of leaders.
   rpc ListLeaders(ListLeadersRequest) returns (Leaders);
+
+  // GetPods is the method that allows to get the pods information.
+  // It returns the list of pods.
   rpc GetPods(GetPodsRequest) returns (Pods);
 }
 
+// AgentStatus is a message that contains the status of the agent.
 message AgentStatus {
+  // the state of the agent.
+  // the possible values are: "active", "standby", "unavailable", "empty".
   string state = 1;
+  // the mode of the agent.
+  // the possible values are: "normal", "orphan", "unknown".
   string mode = 2;
+  // the active zone of the agent.
   string active_zone = 3;
+  // whether the agent is connected to the zone coordinator.
   bool zc_connected = 4;
+  // whether the agent is connected to the peer.
   bool peer_connected = 5;
 }
 
+// Control is the service that provides the control methods.
 service Control {
+  // GetStatus is the method that allows to get the status of the agent.
+  // It returns the status of the agent.
   rpc GetStatus(Empty) returns (AgentStatus);
+
+  // SetStatus is the method that allows to set the status of the agent.
+  // It returns whether the status is set.
   rpc SetStatus(AgentStatus) returns (BoolValue);
 }

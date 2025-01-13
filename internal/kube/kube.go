@@ -22,7 +22,7 @@ import (
 )
 
 type KubeClient interface {
-	GetPods(namespace string, deployment string) (*pb.Pods, error)
+	GetPods(namespace string, deployment string, podName string) (*pb.Pods, error)
 }
 
 type kubeClient struct {
@@ -62,9 +62,43 @@ func NewKubeClient(ctx context.Context, cfg *config.Config) (KubeClient, error) 
 	return &kubeClient{ctx: ctx, cfg: cfg, client: clientset}, nil
 }
 
-func (c *kubeClient) GetPods(namespace string, deployment string) (*pb.Pods, error) {
+func (c *kubeClient) getDeploymentNameByPodName(namespace string, podName string) (string, error) {
+	pod, err := c.client.CoreV1().Pods(namespace).Get(c.ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	for _, ownerRef := range pod.ObjectMeta.OwnerReferences {
+		if ownerRef.Kind == "ReplicaSet" {
+			rs, err := c.client.AppsV1().ReplicaSets(namespace).Get(c.ctx, ownerRef.Name, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+
+			for _, owner := range rs.OwnerReferences {
+				if owner.Kind == "Deployment" {
+					return owner.Name, nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("failed to find a ReplicaSet in pod: %s", podName)
+}
+
+func (c *kubeClient) GetPods(namespace string, deployment string, podName string) (*pb.Pods, error) {
 	podsInfo := &pb.Pods{Items: make([]*pb.Pod, 0)}
 	rsCache := make(map[string]*appv1.ReplicaSet)
+
+	// try to find the deployment name by the pod name if the pod name is provided
+	if podName != "" {
+		deploymentName, err := c.getDeploymentNameByPodName(namespace, podName)
+		if err != nil {
+			return podsInfo, err
+		}
+
+		deployment = deploymentName
+	}
 
 	deploy, err := c.client.AppsV1().Deployments(namespace).Get(c.ctx, deployment, metav1.GetOptions{})
 	if err != nil {

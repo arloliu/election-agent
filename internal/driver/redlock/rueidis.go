@@ -203,7 +203,9 @@ func (c *rueidisConn) MSet(ctx context.Context, pairs ...any) (bool, error) {
 
 	partial := client.B().Mset().KeyValue()
 	for i := 0; i < len(pairs); i += 2 {
-		partial = partial.KeyValue(pairs[i].(string), pairs[i+1].(string))
+		p1, _ := pairs[i].(string)
+		p2, _ := pairs[i+1].(string)
+		partial = partial.KeyValue(p1, p2)
 	}
 	cmd := partial.Build()
 	reply, err := client.Do(ctx, cmd).ToString()

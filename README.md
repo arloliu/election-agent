@@ -130,7 +130,7 @@ If no existing election is found, it returns an empty string and a `NotFound` gR
 **GetPods**
 `rpc GetPods(GetPodsRequest) returns (Pods)`
 
-Retrives a list of pods by `GetPodsRequest.Namespace` and `GetPodsRequest.Deployment`.
+Retrives a list of pods by `GetPodsRequest.Namespace`, and matches the `GetPodsRequest.Deployment` or `GetPodsRequest.PodName`.
 
 The pod item represents the relationship of `Pod`, `ReplicaSet` and `Deployment`. This information helps identify which pods are "newer" through `ReplicaSet.revision` during the k8s rolling update period.
 

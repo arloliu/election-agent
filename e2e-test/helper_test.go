@@ -210,7 +210,8 @@ func waitDeploymentScaled(cfg *envconf.Config, deployment *appsv1.Deployment, ex
 	client := cfg.Client()
 
 	scaleFetcher := func(object k8s.Object) int32 {
-		return object.(*appsv1.Deployment).Status.ReadyReplicas
+		deploy, _ := object.(*appsv1.Deployment)
+		return deploy.Status.ReadyReplicas
 	}
 	log.Printf("Waiting for deployment %s to be scaled to %d...", deployment.ObjectMeta.Name, expectedReplicas)
 	if err := wait.For(
@@ -256,7 +257,8 @@ func waitStatefulSetScaled(cfg *envconf.Config, sts *appsv1.StatefulSet, expecte
 	client := cfg.Client()
 
 	scaleFetcher := func(object k8s.Object) int32 {
-		return object.(*appsv1.StatefulSet).Status.ReadyReplicas
+		st, _ := object.(*appsv1.StatefulSet)
+		return st.Status.ReadyReplicas
 	}
 	log.Printf("Waiting for StatefulSet %s to be scaled to %d...", sts.ObjectMeta.Name, expectedReplicas)
 	if err := wait.For(
